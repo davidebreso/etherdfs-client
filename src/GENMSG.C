@@ -27,7 +27,10 @@
  */
 
 #include <stdio.h>
-#include "version.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include "VERSION.H"
 
 void genmsg(char *fname, char *msg) {
   unsigned short i;
@@ -65,7 +68,13 @@ void genmsg(char *fname, char *msg) {
 
 int main(void) {
 
-  genmsg("msg\\help.c",
+  struct stat st = {0};
+
+  if (stat("msg", &st) == -1) {
+      mkdir("msg", 0755);
+  }
+
+  genmsg("msg/help.c",
     "EtherDFS v" PVER " / Copyright (C) " PDATE " Mateusz Viste\r\n"
     "A network drive for DOS, running over raw ethernet\r\n"
     "\r\n"
@@ -84,44 +93,44 @@ int main(void) {
     "           etherdfs :: C-X D-Y E-Z /p=6F\r\n"
     );
 
-  genmsg("msg\\unsupdos.c", "Unsupported DOS version! EtherDFS requires MS-DOS 5+.\r\n");
+  genmsg("msg/unsupdos.c", "Unsupported DOS version! EtherDFS requires MS-DOS 5+.\r\n");
 
-  genmsg("msg\\noredir.c", "Redirector installation has been forbidden either by DOS or another process.\r\n");
+  genmsg("msg/noredir.c", "Redirector installation has been forbidden either by DOS or another process.\r\n");
 
-  genmsg("msg\\alrload.c", "EtherDFS is already installed and cannot be loaded twice.\r\n");
+  genmsg("msg/alrload.c", "EtherDFS is already installed and cannot be loaded twice.\r\n");
 
-  genmsg("msg\\notload.c", "EtherDFS is not loaded, so it cannot be unloaded.\r\n");
+  genmsg("msg/notload.c", "EtherDFS is not loaded, so it cannot be unloaded.\r\n");
 
-  genmsg("msg\\tsrcomfa.c", "Communication with the TSR failed.\r\n");
+  genmsg("msg/tsrcomfa.c", "Communication with the TSR failed.\r\n");
 
-  genmsg("msg\\nomultpx.c", "Failed to find an available INT 2F multiplex id.\r\nYou may have loaded too many TSRs already.\r\n");
+  genmsg("msg/nomultpx.c", "Failed to find an available INT 2F multiplex id.\r\nYou may have loaded too many TSRs already.\r\n");
 
-  genmsg("msg\\othertsr.c", "EtherDFS cannot be unloaded because another TSR hooked its interrupt handler.\r\n");
+  genmsg("msg/othertsr.c", "EtherDFS cannot be unloaded because another TSR hooked its interrupt handler.\r\n");
 
-  genmsg("msg\\unloaded.c", "EtherDFS unloaded successfully.\r\n");
+  genmsg("msg/unloaded.c", "EtherDFS unloaded successfully.\r\n");
 
-  genmsg("msg\\mapfail.c",
+  genmsg("msg/mapfail.c",
     "Unable to activate the local drive mapping. You are either using an\r\n"
     "unsupported operating system, or your LASTDRIVE directive does not permit\r\n"
     "to define the requested drive letter (try LASTDRIVE=Z in your CONFIG.SYS).\r\n"
   );
 
-  genmsg("msg\\drvactiv.c",
+  genmsg("msg/drvactiv.c",
     "The requested local drive letter is already in use. Please choose another\r\n"
     "drive letter.\r\n"
   );
 
-  genmsg("msg\\memfail.c", "Memory alloc error!\r\n");
+  genmsg("msg/memfail.c", "Memory alloc error!\r\n");
 
-  genmsg("msg\\relfail.c", "DS/SS relocation failed.\r\n");
+  genmsg("msg/relfail.c", "DS/SS relocation failed.\r\n");
 
-  genmsg("msg\\pktdfail.c", "Packet driver initialization failed.\r\n");
+  genmsg("msg/pktdfail.c", "Packet driver initialization failed.\r\n");
 
-  genmsg("msg\\nosrvfnd.c", "No EtherSRV server found on the LAN (not for requested drive at least).\r\n");
+  genmsg("msg/nosrvfnd.c", "No EtherSRV server found on the LAN (not for requested drive at least).\r\n");
 
-  genmsg("msg\\instlled.c", "EtherDFS v" PVER " installed (local MAC ");
+  genmsg("msg/instlled.c", "EtherDFS v" PVER " installed (local MAC ");
 
-  genmsg("msg\\pktdrvat.c", ", pktdrvr at INT ");
+  genmsg("msg/pktdrvat.c", ", pktdrvr at INT ");
 
   return(0);
 }

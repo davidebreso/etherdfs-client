@@ -1623,7 +1623,7 @@ int main(int argc, char **argv) {
     done:
   }
   if (tmpflag < 5) { /* tmpflag contains DOS version or 0 for 'unknown' */
-    #include "msg\\unsupdos.c"
+    #include "msg/unsupdos.c"
     return(1);
   }
 
@@ -1638,7 +1638,7 @@ int main(int argc, char **argv) {
     goodtogo:
   }
   if (tmpflag != 0) {
-    #include "msg\\noredir.c"
+    #include "msg/noredir.c"
     return(1);
   }
 
@@ -1653,7 +1653,7 @@ int main(int argc, char **argv) {
     /* am I loaded at all? */
     etherdfsid = findfreemultiplex(&tmpflag);
     if (tmpflag == 0) { /* not loaded, cannot unload */
-      #include "msg\\notload.c"
+      #include "msg/notload.c"
       return(1);
     }
     /* am I still at the top of the int 2Fh chain? */
@@ -1675,7 +1675,7 @@ int main(int argc, char **argv) {
     int2fptr = (unsigned char far *)MK_FP(myseg, myoff) + 24; /* the interrupt handler's signature appears at offset 24 (this might change at each source code modification) */
     /* look for the "MVet" signature */
     if ((int2fptr[0] != 'M') || (int2fptr[1] != 'V') || (int2fptr[2] != 'e') || (int2fptr[3] != 't')) {
-      #include "msg\\othertsr.c";
+      #include "msg/othertsr.c";
       return(1);
     }
     /* get the ptr to TSR's data */
@@ -1701,7 +1701,7 @@ int main(int argc, char **argv) {
       pop ax
     }
     if (myseg == 0xffffu) {
-      #include "msg\\tsrcomfa.c"
+      #include "msg/tsrcomfa.c"
       return(1);
     }
     tsrdata = MK_FP(myseg, myoff);
@@ -1778,7 +1778,7 @@ int main(int argc, char **argv) {
     freeseg(tsrdata->pspseg);
     /* all done */
     if ((args.flags & ARGFL_QUIET) == 0) {
-      #include "msg\\unloaded.c"
+      #include "msg/unloaded.c"
     }
     return(0);
   }
@@ -1799,10 +1799,10 @@ int main(int argc, char **argv) {
   /* is the TSR installed already? */
   glob_multiplexid = findfreemultiplex(&tmpflag);
   if (tmpflag != 0) { /* already loaded */
-    #include "msg\\alrload.c"
+    #include "msg/alrload.c"
     return(1);
   } else if (glob_multiplexid == 0) { /* no free multiplex id found */
-    #include "msg\\nomultpx.c"
+    #include "msg/nomultpx.c"
     return(1);
   }
 
@@ -1811,11 +1811,11 @@ int main(int argc, char **argv) {
     if (glob_data.ldrv[i] == 0xff) continue;
     cds = getcds(i);
     if (cds == NULL) {
-      #include "msg\\mapfail.c"
+      #include "msg/mapfail.c"
       return(1);
     }
     if (cds->flags != 0) {
-      #include "msg\\drvactiv.c"
+      #include "msg/drvactiv.c"
       return(1);
     }
   }
@@ -1824,7 +1824,7 @@ int main(int argc, char **argv) {
    * as DS */
   newdataseg = allocseg(DATASEGSZ);
   if (newdataseg == 0) {
-    #include "msg\\memfail.c"
+    #include "msg/memfail.c"
     return(1);
   }
 
@@ -1861,7 +1861,7 @@ int main(int argc, char **argv) {
 
   /* patch the TSR and pktdrv_recv() so they use my new DS */
   if (updatetsrds() != 0) {
-    #include "msg\\relfail.c"
+    #include "msg/relfail.c"
     freeseg(newdataseg);
     return(1);
   }
@@ -1880,7 +1880,7 @@ int main(int argc, char **argv) {
   }
   /* has it succeeded? */
   if (glob_data.pktint == 0) {
-    #include "msg\\pktdfail.c"
+    #include "msg/pktdfail.c"
     freeseg(newdataseg);
     return(1);
   }
@@ -1895,7 +1895,7 @@ int main(int argc, char **argv) {
     for (i = 0; glob_data.ldrv[i] == 0xff; i++); /* find first mapped disk */
     /* send a discovery frame that will update glob_rmac */
     if (sendquery(AL_DISKSPACE, i, 0, &answer, &ax, 1) != 6) {
-      #include "msg\\nosrvfnd.c"
+      #include "msg/nosrvfnd.c"
       pktdrv_free(glob_pktdrv_pktcall); /* free the pkt drv and quit */
       freeseg(newdataseg);
       return(1);
@@ -1917,14 +1917,14 @@ int main(int argc, char **argv) {
 
   if ((args.flags & ARGFL_QUIET) == 0) {
     char buff[20];
-    #include "msg\\instlled.c"
+    #include "msg/instlled.c"
     for (i = 0; i < 6; i++) {
       byte2hex(buff + i + i + i, GLOB_LMAC[i]);
     }
     for (i = 2; i < 16; i += 3) buff[i] = ':';
     buff[17] = '$';
     outmsg(buff);
-    #include "msg\\pktdrvat.c"
+    #include "msg/pktdrvat.c"
     byte2hex(buff, glob_data.pktint);
     buff[2] = ')';
     buff[3] = '\r';
