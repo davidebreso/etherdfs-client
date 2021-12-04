@@ -11,7 +11,7 @@ all: etherdfs.exe
 #	wcl -y -0 -s -d0 -lr -ms -we -wx -os genmsg.c -fe=genmsg.exe
 
 genmsg: genmsg.c version.h
-	gcc -o genmsg GENMSG.C
+	gcc -o genmsg genmsg.c
 
 chint.obj: chint086.asm
 	wasm -0 chint086.asm -fo=chint.obj -ms
@@ -36,7 +36,7 @@ etherdfs.exe: genmsg etherdfs.c chint.obj dosstruc.h globals.h version.h
 
 clean: .symbolic
 	if exist etherdfs.exe rm etherdfs.exe
-	if exist genmsg.exe rm genmsg.exe
+	if exist genmsg rm genmsg
 	rm *.obj
 
 pkg: .symbolic etherdfs.exe

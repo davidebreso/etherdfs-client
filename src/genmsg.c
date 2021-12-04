@@ -30,7 +30,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include "VERSION.H"
+#include "version.h"
 
 void genmsg(char *fname, char *msg) {
   unsigned short i;
