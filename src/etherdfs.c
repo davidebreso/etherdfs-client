@@ -493,12 +493,12 @@ int main(int argc, char **argv) {
   /* is it all about unloading myself? */
   if ((args.flags & ARGFL_UNLOAD) != 0) {
     unsigned char etherdfsid, pktint;
-    unsigned short myseg, myoff, myhandle, mydataseg;
+    unsigned short myseg, myoff, myhandle;
     unsigned long pktdrvcall;
     struct tsrshareddata far *tsrdata;
     unsigned char far *int2fptr;
 
-    #include "msg/phase04.c"
+    // #include "msg/phase04.c"
     /* am I loaded at all? */
     etherdfsid = findfreemultiplex(&tmpflag);
     if (tmpflag == 0) { /* not loaded, cannot unload */
@@ -521,8 +521,19 @@ int main(int argc, char **argv) {
       pop bx
       pop ax
     }
-    int2fptr = (unsigned char far *)MK_FP(myseg, myoff) + 24; /* the interrupt handler's signature appears at offset 24 (this might change at each source code modification) */
+    /* the interrupt handler's signature appears at offset 24 
+       (this might change at each source code modification) */
+    int2fptr = (unsigned char far *)MK_FP(myseg, myoff) + 23; 
     /* look for the "MVet" signature */
+/* DEBUG: print signature
+    for(i=0; i < 4; ++i) {
+       buff[i] = int2fptr[i];
+    }
+    buff[4] = '\r';
+    buff[5] = '\n';
+    buff[6] = '$';
+    outmsg(buff);
+ */
     if ((int2fptr[0] != 'M') || (int2fptr[1] != 'V') || (int2fptr[2] != 'e') || (int2fptr[3] != 't')) {
       #include "msg/othertsr.c";
       return(1);
@@ -535,14 +546,13 @@ int main(int argc, char **argv) {
       pushf
       mov ah, etherdfsid
       mov al, 1
-      mov cx, 4d86h
+      mov cx, 4D86h
       mov myseg, 0ffffh
       int 2Fh /* AX should be 0, and BX:CX contains the address */
       test ax, ax
       jnz fail
       mov myseg, bx
       mov myoff, cx
-      mov mydataseg, dx
       fail:
       popf
       pop cx
@@ -554,7 +564,6 @@ int main(int argc, char **argv) {
       return(1);
     }
     tsrdata = MK_FP(myseg, myoff);
-    mydataseg = myseg;
     /* restore previous int 2f handler (under DS:DX, AH=25h, INT 21h)*/
     myseg = tsrdata->prev_2f_handler_seg;
     myoff = tsrdata->prev_2f_handler_off;
@@ -825,7 +834,7 @@ int main(int argc, char **argv) {
   _asm {
     // int 3
     mov ax, 3100h  /* AH=31 'terminate+stay resident', AL=0 exit code */
-    mov dx, 3D00h  /* DX = offset of resident code end     */
+    mov dx, PROGSIZE  /* DX = offset of resident code end     */
     add dx, 256    /* add size of PSP (256 bytes)                     */
     add dx, 15     /* add 15 to avoid truncating last paragraph       */
     shr dx, 1      /* convert bytes to number of 16-bytes paragraphs  */

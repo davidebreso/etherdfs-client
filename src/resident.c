@@ -1089,7 +1089,7 @@ void __interrupt __far inthandler(union INTPACK r) {
     mov ax, ds
     mov ss, ax
     /* set SP to the end of my DATASEGSZ (-2) */
-    mov sp, 118Eh 
+    mov sp, DATASEGSZ - 2 
     sti
   }
   /* call the actual INT 2F processing function */

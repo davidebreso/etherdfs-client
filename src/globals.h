@@ -29,7 +29,8 @@
  * that DATASEGSZ can contain a stack of AT LEAST the size of the stack used
  * by the transient code, since the transient part of the program will switch
  * to it and expects the stack to not become corrupted in the process */
-#define DATASEGSZ 3500
+#define DATASEGSZ 0D90h
+#define PROGSIZE  3880h
 
 /* a few globals useful only for debug messages */
 #if DEBUGLEVEL > 0

@@ -1,9 +1,13 @@
- - Test v0.9.0
+TO DO
  - Check word from the stack saved in glob_reqstkword in inthandler
- - Shrink stack size to 1024 bytes
  - Reorder segments:
         BEGTEXT
         DGROUP
         _TEXT
         FARDATA
  - Reduce resident memory footprint
+
+DONE 
+ - Test v0.9.0
+ - Fix unloading from memory
+ - Shrink stack size to 1024 bytes
