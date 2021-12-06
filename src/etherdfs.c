@@ -38,7 +38,7 @@ static int pktdrv_accesstype(void) {
     mov bx, 0ffffh      /* if_type = 0xffff means 'all' */
     mov dl, 0           /* if_number: 0 (first interface) */
     /* DS:SI should point to the ethertype value in network byte order */
-    int 3
+    // int 3
     mov si, offset glob_pktdrv_sndbuff + 12 /* I don't set DS, it's good already */
     mov cx, 2           /* typelen (ethertype is 16 bits) */
     /* ES:DI points to the receiving routine */

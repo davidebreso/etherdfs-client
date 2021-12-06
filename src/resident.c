@@ -428,7 +428,7 @@ void process2f(void) {
   unsigned char *buff; /* pointer to the "query arguments" part of glob_pktdrv_sndbuff */
   unsigned char subfunction;
   unsigned short *ax; /* used to collect the resulting value of AX */
-  _asm { int 3 };
+  // _asm { int 3 };
   buff = glob_pktdrv_sndbuff + 60;
 
   /* DEBUG output (RED) */
@@ -937,7 +937,7 @@ void __interrupt __far inthandler(union INTPACK r) {
 
     /* uncomment the debug code below to insert a stack's dump into snd eth
      * frame - debugging ONLY! */
-    
+    /*
     mov ax, ss:[BP]
     mov word ptr [glob_pktdrv_sndbuff+16], ax
     mov ax, ss:[BP+2]
@@ -962,6 +962,7 @@ void __interrupt __far inthandler(union INTPACK r) {
     mov word ptr [glob_pktdrv_sndbuff+36], ax
     mov ax, ss:[BP+22]
     mov word ptr [glob_pktdrv_sndbuff+38], ax
+    */
     /* restore AX */
     pop ax
   }
