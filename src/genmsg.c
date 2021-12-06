@@ -131,6 +131,30 @@ int main(void) {
   genmsg("msg/instlled.c", "EtherDFS v" PVER " installed (local MAC ");
 
   genmsg("msg/pktdrvat.c", ", pktdrvr at INT ");
+  
+  genmsg("msg/phase01.c", "Phase 01\r\n");
+
+  genmsg("msg/phase02.c", "Phase 02\r\n");
+
+  genmsg("msg/phase03.c", "Phase 03\r\n");
+
+  genmsg("msg/phase04.c", "Phase 04\r\n");
+
+  genmsg("msg/phase05.c", "Phase 05\r\n");
+
+  genmsg("msg/phase06.c", "Phase 06\r\n");
+
+  genmsg("msg/phase07.c", "Phase 07\r\n");
+
+  genmsg("msg/phase08.c", "Phase 08\r\n");
+
+  genmsg("msg/phase09.c", "Phase 09\r\n");
+
+  genmsg("msg/phase10.c", "Phase 10\r\n");
+
+  genmsg("msg/phase11.c", "Phase 11\r\n");
+
+  genmsg("msg/phase12.c", "Phase 12\r\n");
 
   return(0);
 }

@@ -14,12 +14,28 @@ genmsg: genmsg.c version.h
 	gcc -o genmsg genmsg.c
 
 chint.obj: chint086.asm
-	wasm -0 chint086.asm -fo=chint.obj -ms
-
-etherdfs.exe: genmsg etherdfs.c chint.obj dosstruc.h globals.h version.h
+	wasm -0 chint086.asm -fo=chint.obj -mc
+	
+resident.obj: resident.c chint.h dosstruc.h globals.h
+	wcc -0 -s -d0 -ms -wx resident.c -fo=resident.obj
+	
+etherdfs.obj: genmsg etherdfs.c chint.h dosstruc.h globals.h version.h
 	./genmsg
-	wcl -y -0 -s -d0 -lr -ms -wx -k1024 -fm=etherdfs.map -os chint.obj etherdfs.c -fe=etherdfs.exe
-	upx -9 --8086 etherdfs.exe
+	wcc -0 -s -d0 -ms -wx etherdfs.c -fo=etherdfs.obj
+
+etherdfs.com: genmsg etherdfs.c chint.obj dosstruc.h globals.h version.h
+	./genmsg
+	wcl -y -0 -s -d0 -lr -mt -wx -k1024 -fm=etherdfs.map -os chint.obj -os etherdfs.c -fe=etherdfs.com
+
+etherdfs.exe: genmsg etherdfs.obj chint.obj resident.obj
+	wlink system dos file chint.obj,resident.obj,etherdfs.obj option map=etherdfs name etherdfs order clname code segment begtext  clname bss clname stack
+	# upx -9 --8086 etherdfs.exe
+
+begtext.obj: begtext.c begtext.h
+	wcc -0 -s -d0 -ms -wx begtext.c -fo=begtext.obj	
+
+begtext.exe: begmain.c begtext.obj begtext.h
+	wcl -y -0 -s -d0 -lr -ms -wx -k1024 -fm=begtext.map -os begtext.obj begmain.c -fe=begtext.exe
 
 # -y      ignore the WCL env. variable, if any
 # -0      generate code for 8086
