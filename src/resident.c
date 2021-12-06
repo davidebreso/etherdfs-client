@@ -175,7 +175,7 @@ void __declspec(naked) far pktdrv_recv(void) {
 }
 
 /* this table makes it easy to figure out if I want a subfunction or not */
-static unsigned char supportedfunctions[0x2F] = {
+unsigned char supportedfunctions[0x2F] = {
   AL_INSTALLCHK,  /* 0x00 */
   AL_RMDIR,       /* 0x01 */
   AL_UNKNOWN,     /* 0x02 */
@@ -428,6 +428,7 @@ void process2f(void) {
   unsigned char *buff; /* pointer to the "query arguments" part of glob_pktdrv_sndbuff */
   unsigned char subfunction;
   unsigned short *ax; /* used to collect the resulting value of AX */
+  _asm { int 3 };
   buff = glob_pktdrv_sndbuff + 60;
 
   /* DEBUG output (RED) */
@@ -927,8 +928,8 @@ void __interrupt __far inthandler(union INTPACK r) {
     /* save AX */
     push ax
     /* switch to new (patched) DS */
-    mov ax, seg glob_data
-    mov ds, ax
+    // mov ax, seg glob_data
+    // mov ds, ax
     /* save one word from the stack (might be used by SETATTR later)
      * The original stack should be at SS:BP+30 */
     mov ax, ss:[BP+30]
@@ -936,30 +937,31 @@ void __interrupt __far inthandler(union INTPACK r) {
 
     /* uncomment the debug code below to insert a stack's dump into snd eth
      * frame - debugging ONLY! */
-    /*
-    mov ax, ss:[BP+20]
+    
+    mov ax, ss:[BP]
     mov word ptr [glob_pktdrv_sndbuff+16], ax
-    mov ax, ss:[BP+22]
+    mov ax, ss:[BP+2]
     mov word ptr [glob_pktdrv_sndbuff+18], ax
-    mov ax, ss:[BP+24]
+    mov ax, ss:[BP+4]
     mov word ptr [glob_pktdrv_sndbuff+20], ax
-    mov ax, ss:[BP+26]
+    mov ax, ss:[BP+6]
     mov word ptr [glob_pktdrv_sndbuff+22], ax
-    mov ax, ss:[BP+28]
+    mov ax, ss:[BP+8]
     mov word ptr [glob_pktdrv_sndbuff+24], ax
-    mov ax, ss:[BP+30]
+    mov ax, ss:[BP+10]
     mov word ptr [glob_pktdrv_sndbuff+26], ax
-    mov ax, ss:[BP+32]
+    mov ax, ss:[BP+12]
     mov word ptr [glob_pktdrv_sndbuff+28], ax
-    mov ax, ss:[BP+34]
+    mov ax, ss:[BP+14]
     mov word ptr [glob_pktdrv_sndbuff+30], ax
-    mov ax, ss:[BP+36]
+    mov ax, ss:[BP+16]
     mov word ptr [glob_pktdrv_sndbuff+32], ax
-    mov ax, ss:[BP+38]
+    mov ax, ss:[BP+18]
     mov word ptr [glob_pktdrv_sndbuff+34], ax
-    mov ax, ss:[BP+40]
+    mov ax, ss:[BP+20]
     mov word ptr [glob_pktdrv_sndbuff+36], ax
-    */
+    mov ax, ss:[BP+22]
+    mov word ptr [glob_pktdrv_sndbuff+38], ax
     /* restore AX */
     pop ax
   }
@@ -1086,7 +1088,7 @@ void __interrupt __far inthandler(union INTPACK r) {
     mov ax, ds
     mov ss, ax
     /* set SP to the end of my DATASEGSZ (-2) */
-    mov sp, 10F0h
+    mov sp, 118Eh 
     sti
   }
   /* call the actual INT 2F processing function */

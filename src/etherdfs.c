@@ -38,6 +38,7 @@ static int pktdrv_accesstype(void) {
     mov bx, 0ffffh      /* if_type = 0xffff means 'all' */
     mov dl, 0           /* if_number: 0 (first interface) */
     /* DS:SI should point to the ethertype value in network byte order */
+    int 3
     mov si, offset glob_pktdrv_sndbuff + 12 /* I don't set DS, it's good already */
     mov cx, 2           /* typelen (ethertype is 16 bits) */
     /* ES:DI points to the receiving routine */
@@ -120,7 +121,7 @@ static int pktdrv_init(unsigned short pktintparam, int nocksum) {
 
   /* fetch the vector of the pktdrv interrupt and save it for later */
   _asm {
-    int 3
+    // int 3
     mov ah, 35h /* AH=GetVect */
     mov al, byte ptr [glob_data] + GLOB_DATOFF_PKTINT; /* AL=int number */
     push es /* save ES and BX (will be overwritten) */
@@ -443,12 +444,12 @@ int main(int argc, char **argv) {
   int i;
   char buff[20];
 
-  _asm { int 3 };
+  // _asm { int 3 };
   /* set all drive mappings as 'unused' */
   for (i = 0; i < 26; i++) glob_data.ldrv[i] = 0xff;
 
   /* parse command-line arguments */
-  #include "msg/phase01.c"
+  // #include "msg/phase01.c"
   zerobytes(&args, sizeof(args));
   args.argc = argc;
   args.argv = argv;
@@ -458,7 +459,7 @@ int main(int argc, char **argv) {
   }
 
   /* check DOS version - I require DOS 5.0+ */
-  #include "msg/phase02.c"
+  // #include "msg/phase02.c"
   _asm {
     mov ax, 3306h
     int 21h
@@ -474,7 +475,7 @@ int main(int argc, char **argv) {
   }
 
   /* look whether or not it's ok to install a network redirector at int 2F */
-  #include "msg/phase03.c"
+  // #include "msg/phase03.c"
   _asm {
     mov tmpflag, 0
     mov ax, 1100h
@@ -632,9 +633,9 @@ int main(int argc, char **argv) {
 
   /* remember current int 2f handler, we might over-write it soon (also I
    * use it to see if I'm already loaded) */
-  #include "msg/phase05.c"
+  // #include "msg/phase05.c"
   _asm {
-    int 3
+    // int 3
     mov ax, 352fh; /* AH=GetVect AL=2F */
     push es /* save ES and BX (will be overwritten) */
     push bx
@@ -646,8 +647,8 @@ int main(int argc, char **argv) {
   }
 
   /* is the TSR installed already? */
-  #include "msg/phase06.c"
-  _asm{ int 3 };
+  // #include "msg/phase06.c"
+  // _asm{ int 3 };
   glob_multiplexid = findfreemultiplex(&tmpflag);
   if (tmpflag != 0) { /* already loaded */
     #include "msg/alrload.c"
@@ -683,11 +684,11 @@ int main(int argc, char **argv) {
   } else { /* use the pktdrvr interrupt passed through command line */
     pktdrv_init(args.pktint, args.flags & ARGFL_NOCKSUM);
   }
-  byte2hex(buff, glob_data.pktint);
-  buff[2] = '\r';
-  buff[3] = '\n';
-  buff[4] = '$';
-  outmsg(buff);
+//   byte2hex(buff, glob_data.pktint);
+//   buff[2] = '\r';
+//   buff[3] = '\n';
+//   buff[4] = '$';
+//   outmsg(buff);
   /* has it succeeded? */
   if (glob_data.pktint == 0) {
     #include "msg/pktdfail.c"
@@ -695,20 +696,18 @@ int main(int argc, char **argv) {
   }
   pktdrv_getaddr(GLOB_LMAC);
   
-  for (i = 0; i < 6; i++) {
-      byte2hex(buff + i + i + i, GLOB_LMAC[i]);
-  }
-  for (i = 2; i < 16; i += 3) buff[i] = ':';
-  buff[17] = '\r';
-  buff[18] = '\n';
-  buff[19] = '$';
-  outmsg(buff);
+//   for (i = 0; i < 6; i++) {
+//       byte2hex(buff + i + i + i, GLOB_LMAC[i]);
+//   }
+//   for (i = 2; i < 16; i += 3) buff[i] = ':';
+//   buff[17] = '\r';
+//   buff[18] = '\n';
+//   buff[19] = '$';
+//   outmsg(buff);
 
   /* should I auto-discover the server? */
-  #include "msg/phase09.c"
-  _asm {
-    int 3;
-  }
+//  #include "msg/phase09.c"
+//  _asm { int 3 };
   if ((args.flags & ARGFL_AUTO) != 0) {
     unsigned short *ax;
     unsigned char *answer;
@@ -725,7 +724,7 @@ int main(int argc, char **argv) {
   
   /* set all drives as being 'network' drives (also add the PHYSICAL bit,
    * otherwise MS-DOS 6.0 will ignore the drive) */
-  #include "msg/phase10.c"
+//  #include "msg/phase10.c"
   for (i = 0; i < 26; i++) {
     if (glob_data.ldrv[i] == 0xff) continue;
     cds = getcds(i);
@@ -784,7 +783,7 @@ int main(int argc, char **argv) {
   }
 
   /* get the segment of the PSP (might come handy later) */
-  #include "msg/phase11.c"
+//  #include "msg/phase11.c"
   _asm {
     mov ah, 62h          /* get current PSP address */
     int 21h              /* returns the segment of PSP in BX */
@@ -800,7 +799,7 @@ int main(int argc, char **argv) {
   }
 
   /* set up the TSR (INT 2F catching) */
-  #include "msg/phase12.c"
+//  #include "msg/phase12.c"
   _asm {
     cli
     mov ax, 252fh /* AH=set interrupt vector  AL=2F */
@@ -824,9 +823,9 @@ int main(int argc, char **argv) {
    * PSP is 256 bytes of course. And +15 is needed to avoid truncating the
    * last (partially used) paragraph. */
   _asm {
-    int 3
+    // int 3
     mov ax, 3100h  /* AH=31 'terminate+stay resident', AL=0 exit code */
-    mov dx, 15340  /* DX = offset of resident code end     */
+    mov dx, 3D00h  /* DX = offset of resident code end     */
     add dx, 256    /* add size of PSP (256 bytes)                     */
     add dx, 15     /* add 15 to avoid truncating last paragraph       */
     shr dx, 1      /* convert bytes to number of 16-bytes paragraphs  */

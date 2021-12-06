@@ -28,7 +28,7 @@ etherdfs.com: genmsg etherdfs.c chint.obj dosstruc.h globals.h version.h
 	wcl -y -0 -s -d0 -lr -mt -wx -k1024 -fm=etherdfs.map -os chint.obj -os etherdfs.c -fe=etherdfs.com
 
 etherdfs.exe: genmsg etherdfs.obj chint.obj resident.obj
-	wlink system dos file chint.obj,resident.obj,etherdfs.obj option map=etherdfs name etherdfs order clname code segment begtext  clname bss clname stack
+	wlink system dos file chint.obj,resident.obj,etherdfs.obj option map=etherdfs name etherdfs option dosseg # order clname code segment begtext  clname bss clname stack
 	# upx -9 --8086 etherdfs.exe
 
 begtext.obj: begtext.c begtext.h
