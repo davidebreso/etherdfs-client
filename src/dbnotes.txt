@@ -1,0 +1,23 @@
+
+                    === Porting EtherDFS to Open Watcom 2 ===
+                                Davide Bresolin
+                                
+EtherDFS is a client/server filesystem that allows a modern host (the server) to easily share files with an old PC running DOS. The original client TSR was written by Mateusz Viste in 2017. The source code needs OpenWatcom and a DOS machine to be compiled. To write the EhterDFS TSR in C, Mateusz had to use a few nasty tricks to limit the memory footprint as much as possible, that are described in memnotes.txt. 
+
+This document describes the changes I made to the original source code for two reasons: to compile the TSR with OpenWatcom v2 in a modern OSX machine, and to remove some of the tricks used by Mateusz while keeping the memory footprint small.
+
+*** Compile the code on a modern machine ***
+
+This was easy, and required only a few changes to the code:
+ - modify the Makefile to work on a unix environment
+ - change path separators to unix forward slashes '/'
+ - compile genmsg.c with Apple's clang, since Open Watcom cannot generate OSX
+   executables 
+
+*** Keeping the memory footprint small ***
+
+One of the trick used in the original code is to allocate a separate segment through an INT 21h,48h call, and force EtherDFS to use THAT as its DATA & STACK
+segment. 
+
+
+

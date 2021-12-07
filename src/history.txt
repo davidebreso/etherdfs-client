@@ -1,5 +1,8 @@
 EtherDFS changelog history
 
+v0.9.1 [2021-12-7]:
+ - reduced resident footprint by placing resident data at the start of the memory map
+ 
 v0.9.0 [2021-12-6]:
  - first version that do not allocate extra memory
 

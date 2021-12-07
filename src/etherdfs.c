@@ -2,7 +2,7 @@
  * EtherDFS - a network drive for DOS running over raw ethernet
  * http://etherdfs.sourceforge.net
  *
- * Copyright (C) 2017, 2018 Mateusz Viste
+ * Copyright (C) 2017, 2018 Mateusz Viste, 2021 Davide Bresolin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -29,6 +29,12 @@
 #include "dosstruc.h" /* definitions of structures used by DOS */
 #include "globals.h"  /* global variables used by etherdfs */
 
+/* this function obviously does nothing - but I need it because it is a
+ * 'low-water' mark for the end of my resident code (so I know how much memory
+ * exactly I can trim when going TSR) */
+ void begtextend(void) {
+ }
+
 /* registers a packet driver handle to use on subsequent calls */
 static int pktdrv_accesstype(void) {
   unsigned char cflag = 0;
@@ -38,7 +44,6 @@ static int pktdrv_accesstype(void) {
     mov bx, 0ffffh      /* if_type = 0xffff means 'all' */
     mov dl, 0           /* if_number: 0 (first interface) */
     /* DS:SI should point to the ethertype value in network byte order */
-    // int 3
     mov si, offset glob_pktdrv_sndbuff + 12 /* I don't set DS, it's good already */
     mov cx, 2           /* typelen (ethertype is 16 bits) */
     /* ES:DI points to the receiving routine */
@@ -100,7 +105,6 @@ static int pktdrv_init(unsigned short pktintparam, int nocksum) {
   sig[6] = 'V';
   sig[7] = 'R';
 
-  // printf("pktdrv_init(%d, %d)\n", pktintparam, nocksum);
   /* set my ethertype to 0xF5ED (EDF5 in network byte order) */
   glob_pktdrv_sndbuff[12] = 0xED;
   glob_pktdrv_sndbuff[13] = 0xF5;
@@ -113,7 +117,6 @@ static int pktdrv_init(unsigned short pktintparam, int nocksum) {
 
   pktdrvfunc += 3; /* skip three bytes of executable code */
   for (i = 0; i < 8; i++) if (sig[i] != pktdrvfunc[i]) {
-      // printf("Not a packet driver, return error.\n");
       return(-1);
   }
 
@@ -121,7 +124,6 @@ static int pktdrv_init(unsigned short pktintparam, int nocksum) {
 
   /* fetch the vector of the pktdrv interrupt and save it for later */
   _asm {
-    // int 3
     mov ah, 35h /* AH=GetVect */
     mov al, byte ptr [glob_data] + GLOB_DATOFF_PKTINT; /* AL=int number */
     push es /* save ES and BX (will be overwritten) */
@@ -135,7 +137,6 @@ static int pktdrv_init(unsigned short pktintparam, int nocksum) {
   glob_pktdrv_pktcall = rseg;
   glob_pktdrv_pktcall <<= 16;
   glob_pktdrv_pktcall |= roff;
-  // printf("Packet driver at %04X:%04X %08X\n",rseg, roff, glob_pktdrv_pktcall);
 
   return(pktdrv_accesstype());
 }
@@ -220,6 +221,16 @@ static struct cdsstruct far *getcds(unsigned int drive) {
   return((struct cdsstruct __far *)((unsigned char __far *)dir + (drive * 0x58 /*currdir_size*/)));
 }
 /******* end of CDS-related stuff *******/
+
+/* primitive message output used instead of printf() to limit memory usage
+ * and binary size */
+void outmsg(char *s) {
+  _asm {
+    mov ah, 9h  /* DOS 1+ - WRITE STRING TO STANDARD OUTPUT */
+    mov dx, s   /* small memory model: no need to set DS, 's' is an offset */
+    int 21h
+  }
+}
 
 /* zero out an object of l bytes */
 static void zerobytes(void *obj, unsigned short l) {
@@ -444,12 +455,10 @@ int main(int argc, char **argv) {
   int i;
   char buff[20];
 
-  // _asm { int 3 };
   /* set all drive mappings as 'unused' */
   for (i = 0; i < 26; i++) glob_data.ldrv[i] = 0xff;
 
   /* parse command-line arguments */
-  // #include "msg/phase01.c"
   zerobytes(&args, sizeof(args));
   args.argc = argc;
   args.argv = argv;
@@ -459,7 +468,6 @@ int main(int argc, char **argv) {
   }
 
   /* check DOS version - I require DOS 5.0+ */
-  // #include "msg/phase02.c"
   _asm {
     mov ax, 3306h
     int 21h
@@ -475,7 +483,6 @@ int main(int argc, char **argv) {
   }
 
   /* look whether or not it's ok to install a network redirector at int 2F */
-  // #include "msg/phase03.c"
   _asm {
     mov tmpflag, 0
     mov ax, 1100h
@@ -498,7 +505,6 @@ int main(int argc, char **argv) {
     struct tsrshareddata far *tsrdata;
     unsigned char far *int2fptr;
 
-    // #include "msg/phase04.c"
     /* am I loaded at all? */
     etherdfsid = findfreemultiplex(&tmpflag);
     if (tmpflag == 0) { /* not loaded, cannot unload */
@@ -642,9 +648,7 @@ int main(int argc, char **argv) {
 
   /* remember current int 2f handler, we might over-write it soon (also I
    * use it to see if I'm already loaded) */
-  // #include "msg/phase05.c"
   _asm {
-    // int 3
     mov ax, 352fh; /* AH=GetVect AL=2F */
     push es /* save ES and BX (will be overwritten) */
     push bx
@@ -656,8 +660,6 @@ int main(int argc, char **argv) {
   }
 
   /* is the TSR installed already? */
-  // #include "msg/phase06.c"
-  // _asm{ int 3 };
   glob_multiplexid = findfreemultiplex(&tmpflag);
   if (tmpflag != 0) { /* already loaded */
     #include "msg/alrload.c"
@@ -693,11 +695,6 @@ int main(int argc, char **argv) {
   } else { /* use the pktdrvr interrupt passed through command line */
     pktdrv_init(args.pktint, args.flags & ARGFL_NOCKSUM);
   }
-//   byte2hex(buff, glob_data.pktint);
-//   buff[2] = '\r';
-//   buff[3] = '\n';
-//   buff[4] = '$';
-//   outmsg(buff);
   /* has it succeeded? */
   if (glob_data.pktint == 0) {
     #include "msg/pktdfail.c"
@@ -705,18 +702,7 @@ int main(int argc, char **argv) {
   }
   pktdrv_getaddr(GLOB_LMAC);
   
-//   for (i = 0; i < 6; i++) {
-//       byte2hex(buff + i + i + i, GLOB_LMAC[i]);
-//   }
-//   for (i = 2; i < 16; i += 3) buff[i] = ':';
-//   buff[17] = '\r';
-//   buff[18] = '\n';
-//   buff[19] = '$';
-//   outmsg(buff);
-
   /* should I auto-discover the server? */
-//  #include "msg/phase09.c"
-//  _asm { int 3 };
   if ((args.flags & ARGFL_AUTO) != 0) {
     unsigned short *ax;
     unsigned char *answer;
@@ -733,7 +719,6 @@ int main(int argc, char **argv) {
   
   /* set all drives as being 'network' drives (also add the PHYSICAL bit,
    * otherwise MS-DOS 6.0 will ignore the drive) */
-//  #include "msg/phase10.c"
   for (i = 0; i < 26; i++) {
     if (glob_data.ldrv[i] == 0xff) continue;
     cds = getcds(i);
@@ -792,7 +777,6 @@ int main(int argc, char **argv) {
   }
 
   /* get the segment of the PSP (might come handy later) */
-//  #include "msg/phase11.c"
   _asm {
     mov ah, 62h          /* get current PSP address */
     int 21h              /* returns the segment of PSP in BX */
@@ -808,7 +792,6 @@ int main(int argc, char **argv) {
   }
 
   /* set up the TSR (INT 2F catching) */
-//  #include "msg/phase12.c"
   _asm {
     cli
     mov ax, 252fh /* AH=set interrupt vector  AL=2F */
@@ -827,20 +810,23 @@ int main(int argc, char **argv) {
    * free all the libc startup code and my init functions by passing the
    * number of paragraphs to keep resident to INT 21h, AH=31h. How to compute
    * the number of paragraphs? Simple: look at the memory map and note down
-   * the size of the BEGTEXT segment (that's where I store all TSR routines).
-   * then: (sizeof(BEGTEXT) + sizeof(PSP) + 15) / 16
+   * the size of the RESDATA segment (that's where I store all TSR data) and of
+   * the BEGTEXT segment (that's where I store all TSR routines).
+   * Then: (sizeof(RESDATA) + sizeof(BEGTEXT) + sizeof(PSP) + 15) / 16
    * PSP is 256 bytes of course. And +15 is needed to avoid truncating the
    * last (partially used) paragraph. */
   _asm {
-    // int 3
     mov ax, 3100h  /* AH=31 'terminate+stay resident', AL=0 exit code */
-    mov dx, PROGSIZE  /* DX = offset of resident code end     */
+    mov dx, offset begtextend /* DX = offset of resident code end     */
     add dx, 256    /* add size of PSP (256 bytes)                     */
     add dx, 15     /* add 15 to avoid truncating last paragraph       */
     shr dx, 1      /* convert bytes to number of 16-bytes paragraphs  */
     shr dx, 1      /* the 8086/8088 CPU supports only a 1-bit version */
     shr dx, 1      /* of SHR, so I have to repeat it as many times as */
     shr dx, 1      /* many bits I need to shift.                      */
+    /* Add size of RESDATA (in paragraphs) by subtracting CS and DS   */
+    add dx, seg begtextend    /* add code segment                     */
+    sub dx, seg glob_data     /* subtract data segment                */
     int 21h
   }
 

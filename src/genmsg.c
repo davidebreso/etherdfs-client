@@ -2,7 +2,7 @@
  * This file is part of the EtherDFS project.
  * http://etherdfs.sourceforge.net
  *
- * Copyright (C) 2017 Mateusz Viste
+ * Copyright (C) 2017 Mateusz Viste, 2021 Davide Bresolin
  *
  * genmsg generates C files that contain assembly for outputting to screen
  * every string that etherdfs might need to output.
@@ -75,7 +75,7 @@ int main(void) {
   }
 
   genmsg("msg/help.c",
-    "EtherDFS v" PVER " / Copyright (C) " PDATE " Mateusz Viste\r\n"
+    "EtherDFS v" PVER " / Copyright (C) " PDATE " Mateusz Viste, " DBDATE " Davide Bresolin\r\n"
     "A network drive for DOS, running over raw ethernet\r\n"
     "\r\n"
     "Usage: etherdfs SRVMAC rdrv-ldrv [rdrv2-ldrv2 ...] [options]\r\n"
@@ -131,30 +131,6 @@ int main(void) {
   genmsg("msg/instlled.c", "EtherDFS v" PVER " installed (local MAC ");
 
   genmsg("msg/pktdrvat.c", ", pktdrvr at INT ");
-  
-  genmsg("msg/phase01.c", "Phase 01\r\n");
-
-  genmsg("msg/phase02.c", "Phase 02\r\n");
-
-  genmsg("msg/phase03.c", "Phase 03\r\n");
-
-  genmsg("msg/phase04.c", "Phase 04\r\n");
-
-  genmsg("msg/phase05.c", "Phase 05\r\n");
-
-  genmsg("msg/phase06.c", "Phase 06\r\n");
-
-  genmsg("msg/phase07.c", "Phase 07\r\n");
-
-  genmsg("msg/phase08.c", "Phase 08\r\n");
-
-  genmsg("msg/phase09.c", "Phase 09\r\n");
-
-  genmsg("msg/phase10.c", "Phase 10\r\n");
-
-  genmsg("msg/phase11.c", "Phase 11\r\n");
-
-  genmsg("msg/phase12.c", "Phase 12\r\n");
 
   return(0);
 }

@@ -2,7 +2,7 @@
  * This file is part of the etherdfs project.
  * http://etherdfs.sourceforge.net
  *
- * Copyright (C) 2017 Mateusz Viste
+ * Copyright (C) 2017 Mateusz Viste, 2021 Davide Bresolin
  *
  * Contains all global variables used by etherdfs.
  */
@@ -22,15 +22,10 @@
   #define NULL (void *)0
 #endif
 
-/* required size (in bytes) of the data segment - this must be bigh enough as
- * to accomodate all "DATA" segments AND the stack, which will be located at
- * the very end of the data segment. packet drivers tend to require a stack
- * of several hundreds bytes at least - 1K should be safe... It is important
- * that DATASEGSZ can contain a stack of AT LEAST the size of the stack used
- * by the transient code, since the transient part of the program will switch
- * to it and expects the stack to not become corrupted in the process */
-#define DATASEGSZ 0D90h
-#define PROGSIZE  3880h
+/* required size (in bytes) of the stack for the interrupt handler routine. 
+ * Packet drivers tend to require a stack of several hundreds bytes at least
+ * 1K should be safe... */
+#define NEWSTACKSZ 1024
 
 /* a few globals useful only for debug messages */
 #if DEBUGLEVEL > 0
@@ -84,7 +79,7 @@ struct tsrshareddata {
 /*offs*/
 /*  0 */ unsigned short prev_2f_handler_seg; /* seg:off of the previous 2F handler */
 /*  2 */ unsigned short prev_2f_handler_off; /* (so I can call it for all queries  */
-                                            /* that do not relate to my drive     */
+                                             /* that do not relate to my drive     */
 /*  4 */ unsigned short pspseg;    /* segment of the program's PSP block */
 /*  6 */ unsigned short pkthandle; /* handler returned by the packet driver */
 /*  8 */ unsigned char pktint;     /* software interrupt of the packet driver */
@@ -107,7 +102,6 @@ extern struct sdastruct far *glob_sdaptr; /* pointer to DOS SDA (set by main() a
 
 /* the INT 2F "multiplex id" registerd by EtherDFS */
 extern unsigned char glob_multiplexid;
-
 
 //*************//
 //* Functions *//
