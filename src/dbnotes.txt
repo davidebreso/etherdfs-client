@@ -9,15 +9,35 @@ This document describes the changes I made to the original source code for two r
 *** Compile the code on a modern machine ***
 
 This was easy, and required only a few changes to the code:
- - modify the Makefile to work on a unix environment
- - change path separators to unix forward slashes '/'
- - compile genmsg.c with Apple's clang, since Open Watcom cannot generate OSX
-   executables 
+    - modify the Makefile to work on a unix environment
+    - change path separators to unix forward slashes '/'
+    - compile genmsg.c with Apple's clang, since Open Watcom cannot generate OSX
+      executables 
 
 *** Keeping the memory footprint small ***
 
-One of the trick used in the original code is to allocate a separate segment through an INT 21h,48h call, and force EtherDFS to use THAT as its DATA & STACK
-segment. 
+EtherDFS uses the INT 21h,31h DOS call to go resident. This call also allows to trim any excess memory that won't be needed by the application any more. To minimize the memory footprint it is necessary to place all resident code and data, and also the stack before the transient part of the application. 
 
+You can instruct OpenWatcom to place the resident code in the segment BEGTEXT, that is always the first segment of the memory map. Placing the resident data and the stack before the transient code is much more complicated. The trick used in the original code is to allocate a separate segment through an INT 21h,48h call, and force EtherDFS to use THAT as its DATA & STACK segment by "patching"  portions of the code at runtime.
 
+To remove the separate data and stack segment and the self-modifying code, I forced OpenWatcom to place the resident data in the segment RESDATA of custom class RDATA, and instructed the linker to place RESDATA at the start of the memory map with the ORDER directive.
 
+Still, the stack remained at the top of the memory. Forcing the linker to place the stack before the code segments caused a lot of problems. I solved the problem by allocating a 1024 bytes vector 'newstack' in the resident data segment that is used as stack space when the progam go resident. The interrupt handler routine takes care of pointing the SS and SP registers to the top of 'newstack' vector before processing the int 2F call.
+
+*** Trimming the excess memory ***
+
+To DOS "go resident" call expects the amount of memory that needs to be kept in 16-bytes units (paragraphs). To know how many paragraphs the resident code and data really takes, I used two little tricks to figure it out at compile time.
+
+EtherDFS uses the small memory model with only one code segment and one data segment, with the following memory map:
+
+    RESDATA     (resident data and stack)
+    BEGTEXT     (resident code)
+    _TEXT       (transient code)
+    ....        (transient data and other stuff)
+    STACK       (transient stack)
+
+Given the memory map, the DS register points to the start of RESDATA (the first data portion of the map) and CS to the start of BEGTEXT (the first data portion of the map). Hence, the size of the resident data (in paragraphs) is given by the difference between CS and DS.
+
+To get the size of the resident code I used the trick already used by Mateusz Viste: insert a code symbol (of an empty function) to the start of the transient code. The offset of this simbol is the size of the resident code.
+
+Finally, add the size of the PSP (256 bytes) to get the total amount of resident memory.

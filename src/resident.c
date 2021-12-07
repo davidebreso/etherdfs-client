@@ -28,7 +28,7 @@
 /* all the resident code goes to segment 'BEGTEXT' */
 #pragma code_seg(BEGTEXT, CODE)
 
-/* all the resident data goes to segment 'RESDATA' */
+/* all the resident data goes to segment 'RESDATA' of special class 'RDATA' */
 #pragma data_seg(RESDATA, RDATA)
 
 #include "dosstruc.h" /* definitions of structures used by DOS */
@@ -948,7 +948,7 @@ void __interrupt __far inthandler(union INTPACK r) {
     if (r.h.al == 0) { /* install check */
       r.h.al = 0xff;    /* 'installed' */
       r.w.bx = 0x4d86;  /* MV          */
-      r.w.cx = 0x7e5;   /* 2017        */
+      r.w.cx = 0x7e1;   /* 2017        */
       return;
     }
     if ((r.h.al == 1) && (r.x.cx == 0x4d86)) { /* get shared data ptr (AX=0, ptr under BX:CX) */
