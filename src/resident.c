@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2017, 2018 Mateusz Viste
  * Copyright (c) 2020 Michael Ortmann
+ * Copyright (C) 2021 Davide Bresolin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -28,6 +29,9 @@
 
 /* all the resident code goes to segment 'BEGTEXT' */
 #pragma code_seg(BEGTEXT, CODE)
+
+/* all the resident data goes to segment 'RESDATA' of special class 'RDATA' */
+#pragma data_seg(RESDATA, RDATA)
 
 #include "dosstruc.h" /* definitions of structures used by DOS */
 #include "globals.h"  /* global variables used by etherdfs */
@@ -121,7 +125,6 @@ __declspec(naked) static unsigned short bsdsum(unsigned char *dataptr, unsigned 
  * be modified. */
 void __declspec(naked) far pktdrv_recv(void) {
   _asm {
-    // int 3
     jmp skip
     SIG db 'pktr'
     skip:
@@ -258,19 +261,10 @@ unsigned short sendquery(unsigned char query, unsigned char drive, unsigned shor
   unsigned short count;
   unsigned char t;
   unsigned char volatile far *rtc = (unsigned char far *)0x46C; /* this points to a char, while the rtc timer is a word - but I care only about the lowest 8 bits. Be warned that this location won't increment while interrupts are disabled! */
-  // char buff[20];
-  // printf("sendquery(%d, %d, ... )\r\n", query, drive);
-//   buff[0] = 'S';
-//   buff[1] = 'Q';
-//   buff[2] = '$';
-//   outmsg(buff);
   
   /* resolve remote drive - no need to validate it, it has been validated
    * already by inthandler() */
   drive = glob_data.ldrv[drive];
-//   buff[0] = 'D';
-//   buff[1] = drive + '0';
-//   outmsg(buff);
 
   /* bufflen provides payload's length, but I prefer knowing the frame's len */
   bufflen += 60;
@@ -300,12 +294,9 @@ unsigned short sendquery(unsigned char query, unsigned char drive, unsigned shor
   /* send the query frame and wait for an answer for about 100ms. then, resend
    * the query again and again, up to 5 times. the RTC clock at 0x46C is used
    * as a timing reference. */
-//  buff[0] = ' ';
   glob_pktdrv_recvbufflen = 0; /* mark the receiving buffer empty */
   for (count = 5; count != 0; count--) { /* faster than count=0; count<5; count++ */
     /* send the query frame out */
-//     buff[1] = count + '0';
-//     outmsg(buff);
     _asm {
       /* save registers */
       push ax
@@ -336,39 +327,27 @@ unsigned short sendquery(unsigned char query, unsigned char drive, unsigned shor
     for (;;) {
       int i;
       if ((t != *rtc) && (t+1 != *rtc) && (*rtc != 0)) {
-//           buff[1] = 'R';
-//           outmsg(buff);
           break; /* timeout, retry */
       }
       if (glob_pktdrv_recvbufflen < 1) continue;
       /* I've got something! */
-//       buff[1] = 's';
-//       outmsg(buff);
       /* is the frame long enough for me to care? */
       if (glob_pktdrv_recvbufflen < 60) goto ignoreframe;
       /* is it for me? (correct src mac & dst mac) */
-//       buff[1] = 'm';
-//       outmsg(buff);
       for (i = 0; i < 6; i++) {
         if (glob_pktdrv_recvbuff[i] != GLOB_LMAC[i]) goto ignoreframe;
         if ((updatermac == 0) && (glob_pktdrv_recvbuff[i+6] != GLOB_RMAC[i])) goto ignoreframe;
       }
       /* is the ethertype and seq what I expect? */
-//       buff[1] = 'e';
-//       outmsg(buff);
       if ((((unsigned short *)glob_pktdrv_recvbuff)[6] != 0xF5EDu) || (glob_pktdrv_recvbuff[57] != seq)) goto ignoreframe;
 
       /* validate frame length (if provided) */
       if (((unsigned short *)glob_pktdrv_recvbuff)[26] > glob_pktdrv_recvbufflen) {
         /* frame appears to be truncated */
-//         buff[1] = 'T';
-//         outmsg(buff);
         goto ignoreframe;
       }
       if (((unsigned short *)glob_pktdrv_recvbuff)[26] < 60) {
         /* malformed frame */
-//         buff[1] = 'M';
-//         outmsg(buff);
         goto ignoreframe;
       }
       glob_pktdrv_recvbufflen = ((unsigned short *)glob_pktdrv_recvbuff)[26];
@@ -381,31 +360,21 @@ unsigned short sendquery(unsigned char query, unsigned char drive, unsigned shor
             unsigned short far *v = (unsigned short far *)0xB8000000l;
             v[0] = 0x4000 | '!';
           }*/
-//           buff[1] = 'B';
-//           outmsg(buff);
           goto ignoreframe;
         }
       }
 
       /* return buffer (without headers and seq) */
-//       buff[1] = 'r';
-//       outmsg(buff);
       *replyptr = glob_pktdrv_recvbuff + 60;
       *replyax = (unsigned short *)(glob_pktdrv_recvbuff + 58);
       /* update glob_rmac if needed, then return */
       if (updatermac != 0) copybytes(GLOB_RMAC, glob_pktdrv_recvbuff + 6, 6);
-//       buff[1] = (glob_pktdrv_recvbufflen - 60) + '0';
-//       outmsg(buff);
       return(glob_pktdrv_recvbufflen - 60);
       ignoreframe: /* ignore this frame and wait for the next one */
-//       buff[1] = 'X';
-//       outmsg(buff);
       glob_pktdrv_recvbufflen = 0; /* mark the buffer empty */
     }
   }
 
-//   buff[1] = 'E';
-//   outmsg(buff);
   return(0xFFFFu); /* return error */
 }
 
@@ -425,7 +394,6 @@ void process2f(void) {
   unsigned char *buff; /* pointer to the "query arguments" part of glob_pktdrv_sndbuff */
   unsigned char subfunction;
   unsigned short *ax; /* used to collect the resulting value of AX */
-  // _asm { int 3 };
   buff = glob_pktdrv_sndbuff + 60;
 
   /* DEBUG output (RED) */
@@ -914,6 +882,9 @@ void process2f(void) {
 #endif
 }
 
+/**** Allocate space for the Interrupt handler stack */
+static unsigned char newstack[NEWSTACKSZ];
+
 /* this function is hooked on INT 2Fh */
 void __interrupt __far inthandler(union INTPACK r) {
   /* insert a static code signature so I can reliably patch myself later,
@@ -924,9 +895,6 @@ void __interrupt __far inthandler(union INTPACK r) {
     SKIPTSRSIG:
     /* save AX */
     push ax
-    /* switch to new (patched) DS */
-    // mov ax, seg glob_data
-    // mov ds, ax
     /* save one word from the stack (might be used by SETATTR later)
      * The original stack should be at SS:BP+30 */
     mov ax, ss:[BP+30]
@@ -1085,8 +1053,8 @@ void __interrupt __far inthandler(union INTPACK r) {
     /* set SS to DS */
     mov ax, ds
     mov ss, ax
-    /* set SP to the end of my DATASEGSZ (-2) */
-    mov sp, DATASEGSZ-2
+    /* set SP to the end of the new stack (-2) */
+    mov sp, offset newstack + NEWSTACKSZ - 2 
     sti
   }
   /* call the actual INT 2F processing function */
@@ -1107,12 +1075,5 @@ void __interrupt __far inthandler(union INTPACK r) {
   _mvchain_intr(MK_FP(glob_data.prev_2f_handler_seg, glob_data.prev_2f_handler_off));
 }
 
-
 /*********************** HERE ENDS THE RESIDENT PART ***********************/
-
-/* this function obviously does nothing - but I need it because it is a
- * 'low-water' mark for the end of my resident code (so I know how much memory
- * exactly I can trim when going TSR) */
-void begtextend(void) {
-}
 

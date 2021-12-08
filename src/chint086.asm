@@ -71,5 +71,5 @@ _mvchain_intr     proc far
         ret                             ; return to previous interrupt handler
 _mvchain_intr     endp
 
-BEGTEXT   ends
+BEGTEXT ends
         end
