@@ -24,16 +24,18 @@
  */
 
 #include <i86.h>     /* union INTPACK */
+// #include <stdio.h>   /* for printf */
 #include "version.h" /* program & protocol version */
 
 #include "dosstruc.h" /* definitions of structures used by DOS */
 #include "globals.h"  /* global variables used by etherdfs */
+#include "chint.h"    /* store_newds(newds) */
 
 /* this function obviously does nothing - but I need it because it is a
  * 'low-water' mark for the end of my resident code (so I know how much memory
  * exactly I can trim when going TSR) */
- void begtextend(void) {
- }
+void begtextend(void) {
+}
 
 /* registers a packet driver handle to use on subsequent calls */
 static int pktdrv_accesstype(void) {
@@ -116,9 +118,7 @@ static int pktdrv_init(unsigned short pktintparam, int nocksum) {
   }
 
   pktdrvfunc += 3; /* skip three bytes of executable code */
-  for (i = 0; i < 8; i++) if (sig[i] != pktdrvfunc[i]) {
-      return(-1);
-  }
+  for (i = 0; i < 8; i++) if (sig[i] != pktdrvfunc[i]) return(-1);
 
   glob_data.pktint = pktintparam;
 
@@ -142,7 +142,7 @@ static int pktdrv_init(unsigned short pktintparam, int nocksum) {
 }
 
 
-static void pktdrv_free(unsigned long pktcall) {
+static void pktdrv_free() {
   _asm {
     mov ah, 3
     mov bx, word ptr [glob_data + GLOB_DATOFF_PKTHANDLE]
@@ -288,13 +288,14 @@ static int string2mac(unsigned char *d, char *mac) {
 #define ARGFL_AUTO 2
 #define ARGFL_UNLOAD 4
 #define ARGFL_NOCKSUM 8
+#define ARGFL_LOADHIGH 16
 
 /* a structure used to pass and decode arguments between main() and parseargv() */
 struct argstruct {
   int argc;    /* original argc */
   char **argv; /* original argv */
   unsigned short pktint; /* custom packet driver interrupt */
-  unsigned char flags; /* ARGFL_QUIET, ARGFL_AUTO, ARGFL_UNLOAD, ARGFL_CKSUM */
+  unsigned char flags; /* ARGFL_QUIET, ARGFL_AUTO, ARGFL_UNLOAD, ARGFL_CKSUM, ARGFL_LOADHIGH */
 };
 
 
@@ -352,6 +353,10 @@ static int parseargv(struct argstruct *args) {
           if (arg != NULL) return(-4);
           args->flags |= ARGFL_UNLOAD;
           break;
+        case 'h': /* load TSR high */
+          if (arg != NULL) return(-4);
+          args->flags |= ARGFL_LOADHIGH;
+          break;
         default: /* invalid parameter */
           return(-5);
       }
@@ -395,6 +400,56 @@ static void byte2hex(char *s, unsigned char b) {
   s[0] = h[b >> 4];
   s[1] = h[b & 15];
   s[2] = 0;
+}
+
+/* allocates sz paragraphs in upper memory and returns the segment to allocated memory 
+ * or 0 on error. */
+static unsigned short allocseg(unsigned short sz) {
+  unsigned short volatile res = 0;
+  /* ask DOS for memory */
+  _asm {
+    push cx /* save cx */
+    push dx /* save dx */
+    /* set strategy to 'last fit' */
+    mov ah, 58h
+    xor al, al    /* al = 0 means 'get strategy' */
+    int 21h       /* now current strategy is in ax */
+    mov cx, ax    /* copy current strategy to cx */
+    mov ah, 58h
+    mov al, 02h   /* al = 2 means 'get UMB Link Status'*/ 
+    int 21h       /* now current link status is in ax */
+    mov dx, ax    /* copy UMB Link Status to dx */
+    mov ah, 58h
+    mov al, 03h   /* al = 3 means 'Set UMB Link Status' */
+    mov bx, 1     /* 1 means 'include upper memory' */
+    int 21h
+    mov ah, 58h
+    mov al, 1     /* al = 1 means 'set strategy' */
+    mov bx, 41h   /* 41h means 'upper best fit' */
+    int 21h
+    /* do the allocation now */
+    mov ah, 48h     /* alloc memory (DOS 2+) */
+    mov bx, sz      /* number of paragraphs to allocate */
+    mov res, 0      /* pre-set res to failure (0) */
+    int 21h         /* returns allocated segment in AX */
+    /* check CF */
+    jc failed
+    mov res, ax     /* set res to actual result */
+    failed:
+    /* set link status back to its initial setting */
+    mov ah, 58h
+    mov al, 3
+    mov bl, dl  /* UMB Link Status was kept in DL */
+    int 21h
+    /* set strategy back to its initial setting */
+    mov ah, 58h
+    mov al, 1
+    mov bx, cx
+    int 21h
+    pop dx    /* restore dx */
+    pop cx    /* restore cx */
+  }
+  return(res);
 }
 
 /* free segment previously allocated through allocseg() */
@@ -448,13 +503,65 @@ static unsigned char findfreemultiplex(unsigned char *presentflag) {
   return(freeid);
 }
 
+/* Compute the size of resident memory needed by the program, in 16 btyes
+ * paragraphs. How to compute the number of paragraphs? Simple: look at 
+ * the memory map and note down the size of the RESDATA segment (that's 
+ * where I store all TSR data) and of the BEGTEXT segment (that's where I 
+ * store all TSR routines).
+ * Then: (sizeof(RESDATA) + sizeof(BEGTEXT) + sizeof(PSP) + 15) / 16
+ * PSP is 256 bytes of course. And +15 is needed to avoid truncating the
+ * last (partially used) paragraph. */
+unsigned short get_residentsize() {
+  unsigned short res = 0;
+  _asm {
+    push ax        /* save AX                                         */
+    mov ax, offset begtextend /* AX = offset of resident code end     */
+    add ax, 256    /* add size of PSP (256 bytes)                     */
+    add ax, 15     /* add 15 to avoid truncating last paragraph       */
+    shr ax, 1      /* convert bytes to number of 16-bytes paragraphs  */
+    shr ax, 1      /* the 8086/8088 CPU supports only a 1-bit version */
+    shr ax, 1      /* of SHR, so I have to repeat it as many times as */
+    shr ax, 1      /* many bits I need to shift.                      */
+    /* Add size of RESDATA (in paragraphs) by subtracting CS and DS   */
+    add ax, seg begtextend    /* add code segment                     */
+    sub ax, seg glob_data     /* subtract data segment                */
+    mov res, ax     /* set res to actual result */
+    pop ax          /* restore AX                                     */   
+  }
+  return(res);
+}
+
+/* Compute the segment of the upper memory code */
+unsigned short get_upperds(unsigned short upperseg) {
+  unsigned short res = 0;
+  _asm {
+    push ax        /* save AX                                         */
+    /* Compute size of RESDATA (in paragraphs) by subtracting CS and DS   */
+    mov ax, seg begtextend    /* AX is code segment                   */
+    sub ax, seg glob_data     /* subtract data segment                */
+    add ax, 16      /* add size of PSP (256 bytes, 16 paragraphs)     */
+    add ax, upperseg    /* Add the upper base segment (points at PSP) */
+    mov res, ax     /* set res to actual result */
+    pop ax          /* restore AX                                     */     
+  }
+  return(res);
+}
+
+static unsigned char umb_ident[8] = "ETHERDFS";
+
 int main(int argc, char **argv) {
   struct argstruct args;
   struct cdsstruct far *cds;
   unsigned char tmpflag = 0;
   int i;
+  unsigned short upperseg;     /* segment of upper memory block to load high */
+  unsigned short residentsize = get_residentsize();
+  unsigned short residentcs;   /* segment of resident code */
+  unsigned short old_pspseg;    /* PSP of low memory portion of the program */
   char buff[20];
+  unsigned char far *mcbfptr;
 
+  _asm{ int 3 };
   /* set all drive mappings as 'unused' */
   for (i = 0; i < 26; i++) glob_data.ldrv[i] = 0xff;
 
@@ -527,7 +634,7 @@ int main(int argc, char **argv) {
       pop bx
       pop ax
     }
-    /* the interrupt handler's signature appears at offset 24 
+    /* the interrupt handler's signature appears at offset 23 
        (this might change at each source code modification) */
     int2fptr = (unsigned char far *)MK_FP(myseg, myoff) + 23; 
     /* look for the "MVet" signature */
@@ -569,6 +676,7 @@ int main(int argc, char **argv) {
       #include "msg/tsrcomfa.c"
       return(1);
     }
+    // printf("TSR shared data at %04X:%04X\n", myseg, myoff);
     tsrdata = MK_FP(myseg, myoff);
     /* restore previous int 2f handler (under DS:DX, AH=25h, INT 21h)*/
     myseg = tsrdata->prev_2f_handler_seg;
@@ -637,7 +745,8 @@ int main(int argc, char **argv) {
       cds = getcds(i);
       if (cds != NULL) cds->flags = 0;
     }
-    /* free TSR's data/stack seg and its PSP */
+    /* free TSR's resident seg and its PSP */
+    // printf("Free TSR's resident memory at %04X\n", tsrdata->pspseg);
     freeseg(tsrdata->pspseg);
     /* all done */
     if ((args.flags & ARGFL_QUIET) == 0) {
@@ -686,6 +795,14 @@ int main(int argc, char **argv) {
   /* remember the SDA address (will be useful later) */
   glob_sdaptr = getsda();
 
+  /* Save resident data segment inside resident code segment. */
+  glob_newds = (FP_SEG((void far *)&glob_data));
+  // printf("Saved resident data segment at %04X\n", glob_newds);
+
+  /* Save resident code segment. */
+  residentcs = (FP_SEG((void far *)&inthandler));
+  // printf("Saved resident code segment at %04X\n", residentcs);
+
   /* init the packet driver interface */
   glob_data.pktint = 0;
   if (args.pktint == 0) { /* detect first packet driver within int 60h..80h */
@@ -712,7 +829,7 @@ int main(int argc, char **argv) {
     /* send a discovery frame that will update glob_rmac */
     if (sendquery(AL_DISKSPACE, i, 0, &answer, &ax, 1) != 6) {
       #include "msg/nosrvfnd.c"
-      pktdrv_free(glob_pktdrv_pktcall); /* free the pkt drv and quit */
+      pktdrv_free(); /* free the pkt drv and quit */
       return(1);
     }
   }
@@ -728,6 +845,80 @@ int main(int argc, char **argv) {
     cds->current_path[1] = ':';
     cds->current_path[2] = '\\';
     cds->current_path[3] = 0;
+  }
+
+  /* get the segment of the PSP (might come handy later) */
+  _asm {
+    mov ah, 62h          /* get current PSP address */
+    int 21h              /* returns the segment of PSP in BX */
+    mov word ptr [glob_data + GLOB_DATOFF_PSPSEG], bx  /* copy PSP segment to glob_pspseg */
+  }
+  // printf("PSP segment at %04X\n", glob_data.pspseg);
+  // printf("RESDATA segment at %04X\n", FP_SEG((void far *)&glob_data));
+  // printf("BEGTEXT segment at %04X\n", FP_SEG((void far *)inthandler));
+
+  /* do I have to load myself high? */
+  if ((args.flags & ARGFL_LOADHIGH) != 0) {
+    /* allocate a new segment in the upper memory area to use for resident code and data */
+    upperseg = allocseg(residentsize);
+    if (upperseg == 0) {
+      #include "msg/memfail.c"
+      return(1);
+    }
+    // printf("Upper segment at %04X\n", upperseg);
+    /* New resident data segment is upperseg + sizeof(PSP) in paragraphs 
+     * PSP is 256 bytes (16 paragraphs). */
+    glob_newds = upperseg + 16;
+    // printf("Upper resident data segment at %04X\n", glob_newds);
+    /* Get upper resident code segment */
+    residentcs = get_upperds(upperseg);
+    // printf("Upper resident code segment at %04X\n", residentcs);
+
+    /* Set name of the block owner in the MCB
+     * The Memory Control Block is 1 paragraph below upperseg
+     * At offset 8 in MCB should be the name of block owner. */
+    mcbfptr = (unsigned char far *)MK_FP(upperseg -1, 8); 
+    // printf("Upper MCB signature at %04X:%04X\n", FP_SEG(mcbfptr), FP_OFF(mcbfptr));  
+    for(i = 0; i < 8; i++) {
+      mcbfptr[i] = umb_ident[i];
+    }
+  
+    /* Set saved PSP segment to the upper memory block */
+    old_pspseg = glob_data.pspseg;
+    glob_data.pspseg = upperseg;
+    // printf("Upper PSP segment at %04X\n", glob_data.pspseg);
+    /* copy resident code and data into the upper memory segment */
+    _asm {
+      /* save registers on the stack */
+      push ds
+      push es
+      push ax
+      push cx
+      push si
+      push di
+      pushf
+      /* copy the memory block */
+      mov cx, residentsize /* cx is number of paragraphs to copy             */
+      shl cx, 1           /* convert paragraphs to number of bytes           */
+      shl cx, 1           /* the 8086/8088 CPU supports only a 1-bit version */
+      shl cx, 1           /* of SHL, so I have to repeat it as many times as */
+      shl cx, 1           /* many bits I need to shift.                      */    
+      xor si, si          /* si = 0*/
+      xor di, di          /* di = 0 */
+      cld                 /* clear direction flag (increment si/di) */
+      mov ax, old_pspseg  /* load ds with low memory PSP segment */           
+      mov ds, ax          
+      mov es, upperseg    /* load es with upperseg */
+      rep movsb           /* execute copy DS:SI -> ES:DI */
+      /* restore registers */
+      popf
+      pop di
+      pop si
+      pop cx
+      pop ax
+      pop es
+      pop ds
+    }
   }
 
   if ((args.flags & ARGFL_QUIET) == 0) {
@@ -776,14 +967,8 @@ int main(int argc, char **argv) {
     }
   }
 
-  /* get the segment of the PSP (might come handy later) */
-  _asm {
-    mov ah, 62h          /* get current PSP address */
-    int 21h              /* returns the segment of PSP in BX */
-    mov word ptr [glob_data + GLOB_DATOFF_PSPSEG], bx  /* copy PSP segment to glob_pspseg */
-  }
-
   /* free the environment (env segment is at offset 2C of the PSP) */
+  // printf("Free the environment.\n");
   _asm {
     mov es, word ptr [glob_data + GLOB_DATOFF_PSPSEG] /* load ES with PSP's segment */
     mov es, es:[2Ch]    /* get segment of the env block */
@@ -792,13 +977,14 @@ int main(int argc, char **argv) {
   }
 
   /* set up the TSR (INT 2F catching) */
+  // printf("Set up the TSR at %04X:%04X\n", residentcs, inthandler);
   _asm {
     cli
     mov ax, 252fh /* AH=set interrupt vector  AL=2F */
     push ds /* preserve DS and DX */
     push dx
-    push cs /* set DS to current CS, that is provide the */
-    pop ds  /* int handler's segment */
+    push residentcs   /* set DS to the resident code segment, */
+    pop ds      /* that is provide the int handler's segment  */
     mov dx, offset inthandler /* int handler's offset */
     int 21h
     pop dx /* restore DS and DX to previous values */
@@ -806,6 +992,21 @@ int main(int argc, char **argv) {
     sti
   }
 
+  // printf("Turn self into a TSR keeping %d paragraphs of memory\n", residentsize);
+  /* If the TSR is loaded high, set the PSP to upper memory and deallocate low memory */
+  if ((args.flags & ARGFL_LOADHIGH) != 0) {
+    /* Set new PSP to upper memory */
+    _asm {
+      mov bx, upperseg    /* BX = new process PSP segment address */
+      mov ah, 50h         /* INT 21,50 - Set Current Process ID */
+      int 21h
+    }
+    /* Deallocate the whole low memory of the program */
+    freeseg(old_pspseg);
+  }
+  /* When loading the TSR high, the following code actually run in deallocated memory
+   * but luckily it is not overwritten yet by DOS. */
+   
   /* Turn self into a TSR and free memory I won't need any more. That is, I
    * free all the libc startup code and my init functions by passing the
    * number of paragraphs to keep resident to INT 21h, AH=31h. How to compute
@@ -816,17 +1017,8 @@ int main(int argc, char **argv) {
    * PSP is 256 bytes of course. And +15 is needed to avoid truncating the
    * last (partially used) paragraph. */
   _asm {
-    mov ax, 3100h  /* AH=31 'terminate+stay resident', AL=0 exit code */
-    mov dx, offset begtextend /* DX = offset of resident code end     */
-    add dx, 256    /* add size of PSP (256 bytes)                     */
-    add dx, 15     /* add 15 to avoid truncating last paragraph       */
-    shr dx, 1      /* convert bytes to number of 16-bytes paragraphs  */
-    shr dx, 1      /* the 8086/8088 CPU supports only a 1-bit version */
-    shr dx, 1      /* of SHR, so I have to repeat it as many times as */
-    shr dx, 1      /* many bits I need to shift.                      */
-    /* Add size of RESDATA (in paragraphs) by subtracting CS and DS   */
-    add dx, seg begtextend    /* add code segment                     */
-    sub dx, seg glob_data     /* subtract data segment                */
+    mov ax, 3100h     /* AH=31 'terminate+stay resident', AL=0 exit code */
+    mov dx, residentsize /* DX = size of resident memory (in paragraphs) */
     int 21h
   }
 

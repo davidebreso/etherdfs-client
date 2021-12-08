@@ -1,9 +1,9 @@
 TO DO
- - Test v0.9.1
- - Check word from the stack saved in glob_reqstkword in inthandler
+ - Test v0.9.2
 
 DONE 
  - Test v0.9.0
+ - Test v0.9.1
  - Fix unloading from memory
  - Shrink stack size to 1024 bytes
  - Reorder segments:
@@ -12,3 +12,5 @@ DONE
         _TEXT
         FARDATA
  - Reduce resident memory footprint
+ - Check word from the stack saved in glob_reqstkword in inthandler
+ - Create code to load high only the resident part of the program

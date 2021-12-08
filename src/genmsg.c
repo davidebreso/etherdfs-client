@@ -82,6 +82,7 @@ int main(void) {
     "       etherdfs /u\r\n"
     "\r\n"
     "Options:\r\n"
+    "  /h      install EtherDFS in upper memory\r\n"
     "  /p=XX   use packet driver at interrupt XX (autodetect otherwise)\r\n"
     "  /n      disable EtherDFS checksums\r\n"
     "  /q      quiet mode (print nothing if loaded/unloaded successfully)\r\n"
@@ -120,9 +121,9 @@ int main(void) {
     "drive letter.\r\n"
   );
 
-  genmsg("msg/memfail.c", "Memory alloc error!\r\n");
+  genmsg("msg/memfail.c", "Upper memory alloc error!\r\n");
 
-  genmsg("msg/relfail.c", "DS/SS relocation failed.\r\n");
+  genmsg("msg/relfail.c", "Relocation to upper memory failed.\r\n");
 
   genmsg("msg/pktdfail.c", "Packet driver initialization failed.\r\n");
 
