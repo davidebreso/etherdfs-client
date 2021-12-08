@@ -1,5 +1,11 @@
 EtherDFS changelog history
 
+v0.9.0 [2021-12-6]:
+ - first version that do not allocate extra memory
+
+v0.8.3 [2021-12-4]:
+ - port to Open Watcom v2 under OSX
+
 v0.8.2m [20200603]
  - reduced EtherDFS resident footprint
 
