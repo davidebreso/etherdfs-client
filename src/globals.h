@@ -113,15 +113,4 @@ extern unsigned short sendquery(unsigned char query, unsigned char drive, unsign
 extern void __interrupt __far inthandler(union INTPACK r);
 extern void begtextend(void);
 
-/* primitive message output used instead of printf() to limit memory usage
- * and binary size */
-void outmsg(char *s);
-#pragma aux outmsg =                                                         \
-  "mov ah, 9h" /* DOS 1+ - WRITE STRING TO STANDARD OUTPUT                   \
-                * DS:DX -> '$'-terminated string                             \
-                * small memory model: no need to set DS, 's' is an offset */ \
-  "int 21h"                                                                  \
-parm [dx] modify exact [ah] nomemory;
-
-
 #endif

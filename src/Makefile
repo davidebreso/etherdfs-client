@@ -14,7 +14,7 @@ genmsg: genmsg.c version.h
 	gcc -o genmsg genmsg.c
 
 chint.obj: chint086.asm
-	wasm -0 chint086.asm -fo=chint.obj -mc
+	wasm -0 chint086.asm -fo=chint.obj -ms
 	
 resident.obj: resident.c chint.h dosstruc.h globals.h
 	wcc -0 -s -d0 -ms -wx resident.c -fo=resident.obj
@@ -28,7 +28,7 @@ etherdfs.com: genmsg etherdfs.c chint.obj dosstruc.h globals.h version.h
 	wcl -y -0 -s -d0 -lr -mt -wx -k1024 -fm=etherdfs.map -os chint.obj -os etherdfs.c -fe=etherdfs.com
 
 etherdfs.exe: genmsg etherdfs.obj chint.obj resident.obj
-	wlink system dos file resident.obj,chint.obj,etherdfs.obj option map=etherdfs name etherdfs order clname rdata clname code segment begtext segment _text clname far_data clname begdata
+	wlink system dos file chint.obj,resident.obj,etherdfs.obj option map=etherdfs name etherdfs order clname rdata clname code segment begtext segment _text clname far_data clname begdata
 	upx -9 --8086 etherdfs.exe
 
 begtext.obj: begtext.c begtext.h

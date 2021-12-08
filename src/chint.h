@@ -13,4 +13,6 @@ _WCRTLINK extern void     _chain_intr( void
 
 _WCRTLINK extern void _mvchain_intr(void far *__handler);
 
+extern unsigned short far glob_newds;
+
 #endif

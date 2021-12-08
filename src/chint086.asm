@@ -1,9 +1,24 @@
+
+        name    chainint
+
+BEGTEXT   segment word public 'CODE'
+BEGTEXT   ends
+
+
+BEGTEXT   segment
+
+; Global variable to store resident data segment inside resident code segment. 
+; Used by inthandler and pktdrv_recv to restore the correct DS value. 
+glob_newds       label word
+        dw      0h
+        public  "C",glob_newds       
+
+
 ; this is a copy of the _chain_intr() function, borrowed as-is from the
 ; source code of OpenWatcom 1.9 (bld/clib/intel/a/chint086.asm). I only
 ; changed the name of the procedure to _mvchain_intr() to avoid confusion.
 ; the reason I'm doing this is to have it inside my own code segment, so I
-; can use it from within the TSR after dropping all libc */
-
+; can use it from within the TSR after dropping all libc 
 
 ;*****************************************************************************
 ;*
@@ -34,19 +49,6 @@
 ;* Description:  16-bit chain interrupt handler function.
 ;*
 ;*****************************************************************************
-
-
-;include mdef.inc
-;include struct.inc
-
-        name    chainint
-
-BEGTEXT   segment word public 'CODE'
-BEGTEXT   ends
-
-
-BEGTEXT   segment
-
 _mvchain_intr     proc far
         public  "C",_mvchain_intr
         mov     cx,ax                   ; get offset

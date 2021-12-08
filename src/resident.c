@@ -132,8 +132,8 @@ void __declspec(naked) far pktdrv_recv(void) {
     push ds  /* save old ds (I will change it) */
     push bx  /* save bx (I use it as a temporary register) */
     pushf    /* save flags */
-    /* set my custom DS (not 0, it has been patched at runtime already) */
-    mov bx, seg glob_data
+    /* set my custom DS (saved in CS:glob_newds) */
+    mov bx, cs:glob_newds
     mov ds, bx
     /* handle the call */
     cmp ax, 0
@@ -895,6 +895,9 @@ void __interrupt __far inthandler(union INTPACK r) {
     SKIPTSRSIG:
     /* save AX */
     push ax
+    /* set my custom DS (saved in CS:glob_newds) */
+    mov ax, cs:glob_newds
+    mov ds, ax
     /* save one word from the stack (might be used by SETATTR later)
      * The original stack should be at SS:BP+30 */
     mov ax, ss:[BP+30]
