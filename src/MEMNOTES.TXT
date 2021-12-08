@@ -141,7 +141,7 @@ declarations into something like this, to enforce stack usage:
   hello[0]='H'; hello[1]='e'; hello[2]='l'; hello[3]='l'; hello[4]='o';
 
 But what if the amount of text you wish to output is much larger? It might
-become a real pain to handle very long strings, not mentionning the fact that
+become a real pain to handle very long strings, not mentioning the fact that
 you might want to keep your stack usage at a reasonable level as well.
 
 I am aware of no easy solution for this. But since I was motivated, I ended up

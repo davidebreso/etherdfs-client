@@ -1,5 +1,8 @@
 EtherDFS changelog history
 
+v0.8.2m [20200603]
+ - reduced EtherDFS resident footprint
+
 v0.8.2 [2018-02-03]:
  - support for lock/unlock operations (INT 2Fh,110Ah).
 
@@ -22,7 +25,7 @@ v0.8 [2017-03-04]:
 v0.7 [2017-02-11]:
  - MS-DOS compat: flagging newly mapped drive so MS-DOS doesn't ignore it,
  - fixed FindNext behavior so it's compatible with ATTRIB from MS-DOS,
- - implemented the "Special Open" call (used by COPY in MSDOS 5.0 and 6.x),
+ - implemented the "Special Open" call (used by COPY in MS-DOS 5.0 and 6.x),
  - increased timeout retries from 3 to 5 (more reliable on lossy networks),
  - fixed parsing of the MAC address provided on command-line,
  - minor speed optimizations.

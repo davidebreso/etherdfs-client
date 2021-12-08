@@ -11,7 +11,7 @@
 #define GLOBALS_SENTINEL
 
 /* required size (in bytes) of the data segment - this must be bigh enough as
- * to accomodate all "DATA" segments AND the stack, which will be located at
+ * to accommodate all "DATA" segments AND the stack, which will be located at
  * the very end of the data segment. packet drivers tend to require a stack
  * of several hundreds bytes at least - 1K should be safe... It is important
  * that DATASEGSZ can contain a stack of AT LEAST the size of the stack used
@@ -67,7 +67,7 @@ static struct sdastruct far *glob_sdaptr; /* pointer to DOS SDA (set by main() a
 static unsigned short glob_oldstack_seg;
 static unsigned short glob_oldstack_off;
 
-/* the INT 2F "multiplex id" registerd by EtherDFS */
+/* the INT 2F "multiplex id" registered by EtherDFS */
 static unsigned char glob_multiplexid;
 
 /* an INTPACK structure used to store registers as set when INT2F is called */

@@ -74,7 +74,7 @@ struct foundfilestruct {
  * Ptr to current CDS          282h    26Ch
  * Extended open mode          2E1h    Not supported
  *
- * The struct below is matching FreeDOS and MSDOS 4+
+ * The struct below is matching FreeDOS and MS-DOS 4+
  */
 struct sdastruct {
   unsigned char f0[12];

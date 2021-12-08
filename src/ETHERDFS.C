@@ -3,6 +3,7 @@
  * http://etherdfs.sourceforge.net
  *
  * Copyright (C) 2017, 2018 Mateusz Viste
+ * Copyright (c) 2020 Michael Ortmann
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -31,7 +32,7 @@
 #define DEBUGLEVEL 0
 
 /* define the maximum size of a frame, as sent or received by etherdfs.
- * example: value 1084 accomodates payloads up to 1024 bytes +all headers */
+ * example: value 1084 accommodates payloads up to 1024 bytes +all headers */
 #define FRAMESIZE 1090
 
 #include "dosstruc.h" /* definitions of structures used by DOS */
@@ -81,24 +82,22 @@ static int len_if_no_wildcards(char far *s) {
 }
 
 /* computes a BSD checksum of l bytes at dataptr location */
-static unsigned short bsdsum(unsigned char *dataptr, unsigned short l) {
-  unsigned short cksum = 0;
+__declspec(naked) static unsigned short bsdsum(unsigned char *dataptr, unsigned short l) {
   _asm {
     cld           /* clear direction flag */
     xor bx, bx    /* bx will hold the result */
     xor ax, ax
-    mov cx, l
-    mov si, dataptr
     iterate:
     lodsb         /* load a byte from DS:SI into AL and INC SI */
     ror bx, 1
     add bx, ax
     dec cx        /* DEC CX + JNZ could be replaced by a single LOOP */
     jnz iterate   /* instruction, but DEC+JNZ is 3x faster (on 8086) */
-    mov cksum, bx
+    ret
   }
-  return(cksum);
 }
+/* Must be [si] [cx] and NOT [si cx] */
+#pragma aux bsdsum parm [si] [cx] value [bx] modify exact [ax bx cx si] nomemory;
 
 /* this function is called two times by the packet driver. One time for
  * telling that a packet is incoming, and how big it is, so the application
@@ -112,7 +111,7 @@ static unsigned short bsdsum(unsigned char *dataptr, unsigned short l) {
 void __declspec(naked) far pktdrv_recv(void) {
   _asm {
     jmp skip
-    SIG db 'p','k','t','r'
+    SIG db 'pktr'
     skip:
     /* save DS and flags to stack */
     push ds  /* save old ds (I will change it) */
@@ -132,8 +131,7 @@ void __declspec(naked) far pktdrv_recv(void) {
     jg nobufferavail  /* if signed > 0, then we are busy already */
 
     /* buffer is available, set its seg:off in es:di */
-    push ds /* set es:di to recvbuff */
-    pop es
+    mov es,bx /* set es:di to recvbuff */
     mov di, offset glob_pktdrv_recvbuff
     /* set bufferlen to expected len and switch it to neg until data comes */
     mov glob_pktdrv_recvbufflen, cx
@@ -142,11 +140,10 @@ void __declspec(naked) far pktdrv_recv(void) {
     jmp restoreandret
 
   nobufferavail: /* no buffer available, or it's too small -> fail */
-    xor bx,bx      /* set bx to zero... */
-    push bx        /* and push it to the stack... */
-    push bx        /* twice */
-    pop es         /* zero out es and di - this tells the */
-    pop di         /* packet driver 'sorry no can do'     */
+    /* zero out es and di - this tells the packet driver 'sorry no can do' */
+    xor di,di
+    push di
+    pop es
     /* restore flags, bx and ds, then return */
     jmp restoreandret
 
@@ -288,7 +285,7 @@ static unsigned short sendquery(unsigned char query, unsigned char drive, unsign
    * already by inthandler() */
   drive = glob_data.ldrv[drive];
 
-  /* bufflen provides payload's lenght, but I prefer knowing the frame's len */
+  /* bufflen provides payload's length, but I prefer knowing the frame's len */
   bufflen += 60;
 
   /* if query too long then quit */
@@ -519,7 +516,7 @@ void process2f(void) {
         } else {
           chunklen = FRAMESIZE - 60;
         }
-        /* query is OOOOSSLL (offset, start sector, lenght to read) */
+        /* query is OOOOSSLL (offset, start sector, length to read) */
         ((unsigned long *)buff)[0] = sftptr->file_pos + totreadlen;
         ((unsigned short *)buff)[2] = sftptr->start_sector;
         ((unsigned short *)buff)[3] = chunklen;
@@ -905,7 +902,7 @@ void __interrupt __far inthandler(union INTPACK r) {
    * this will also contain the DS segment to use and actually set it */
   _asm {
     jmp SKIPTSRSIG
-    TSRSIG DB 'M','V','e','t'
+    TSRSIG db 'MVet'
     SKIPTSRSIG:
     /* save AX */
     push ax
@@ -1288,13 +1285,13 @@ static struct cdsstruct far *getcds(unsigned int drive) {
 
 /* primitive message output used instead of printf() to limit memory usage
  * and binary size */
-static void outmsg(char *s) {
-  _asm {
-    mov ah, 9h  /* DOS 1+ - WRITE STRING TO STANDARD OUTPUT */
-    mov dx, s   /* small memory model: no need to set DS, 's' is an offset */
-    int 21h
-  }
-}
+static void outmsg(char *s);
+#pragma aux outmsg =                                                         \
+  "mov ah, 9h" /* DOS 1+ - WRITE STRING TO STANDARD OUTPUT                   \
+                * DS:DX -> '$'-terminated string                             \
+                * small memory model: no need to set DS, 's' is an offset */ \
+  "int 21h"                                                                  \
+parm [dx] modify exact [ah] nomemory;
 
 /* zero out an object of l bytes */
 static void zerobytes(void *obj, unsigned short l) {
@@ -1464,41 +1461,39 @@ static void byte2hex(char *s, unsigned char b) {
 /* allocates sz bytes of memory and returns the segment to allocated memory or
  * 0 on error. the allocation strategy is 'highest possible' (last fit) to
  * avoid memory fragmentation */
-static unsigned short allocseg(unsigned short sz) {
-  unsigned short volatile res = 0;
-  /* sz should contains number of 16-byte paragraphs instead of bytes */
-  sz += 15; /* make sure to allocate enough paragraphs */
-  sz >>= 4;
+__declspec(naked) static unsigned short allocseg(unsigned short sz) {
   /* ask DOS for memory */
   _asm {
-    push cx /* save cx */
     /* set strategy to 'last fit' */
-    mov ah, 58h
-    xor al, al  /* al = 0 means 'get strategy' */
-    int 21h     /* now current strategy is in ax */
-    mov cx, ax  /* copy current strategy to cx */
-    mov ah, 58h
-    mov al, 1   /* al = 1 means 'set strategy' */
-    mov bl, 2   /* 2 or greater means 'last fit' */
+    mov ax, 5800h /* DOS 2.11+ - GET OR SET MEMORY ALLOCATION STRATEGY
+                   * al = 0 means 'get allocation strategy' */
+    int 21h       /* now current strategy is in ax */
+    push ax       /* push current strategy to stack */
+    mov ax, 5801h /* al = 1 means 'set allocation strategy' */
+    mov bl, 2     /* 2 or greater means 'last fit' */
     int 21h
     /* do the allocation now */
-    mov ah, 48h     /* alloc memory (DOS 2+) */
-    mov bx, sz      /* number of paragraphs to allocate */
-    mov res, 0      /* pre-set res to failure (0) */
-    int 21h         /* returns allocated segment in AX */
+    mov ah, 48h   /* DOS 2+ - ALLOCATE MEMORY */
+    mov bx, dx    /* number of paragraphs to allocate */
+    /* bx should contains number of 16-byte paragraphs instead of bytes */
+    add bx, 15    /* make sure to allocate enough paragraphs */
+    mov cl, 4     /* convert bytes to number of 16-bytes paragraphs  */
+    shr bx, cl    /* the 8086/8088 CPU supports only a 1-bit version
+                   * of SHR so I use the reg,CL method               */
+    mov dx, 0     /* pre-set res to failure (0) */
+    int 21h       /* returns allocated segment in AX */
     /* check CF */
     jc failed
-    mov res, ax     /* set res to actual result */
+    mov dx, ax    /* set res to actual result */
     failed:
     /* set strategy back to its initial setting */
-    mov ah, 58h
-    mov al, 1
-    mov bx, cx
+    mov ax, 5801h
+    pop bx        /* pop current strategy from stack */ 
     int 21h
-    pop cx    /* restore cx */
+    ret
   }
-  return(res);
 }
+#pragma aux allocseg parm [dx] value [dx] modify exact [ax bx cl dx] nomemory;
 
 /* free segment previously allocated through allocseg() */
 static void freeseg(unsigned short segm) {
@@ -1658,8 +1653,7 @@ int main(int argc, char **argv) {
     }
     /* am I still at the top of the int 2Fh chain? */
     _asm {
-      /* save AX, BX and ES */
-      push ax
+      /* save BX and ES */
       push bx
       push es
       /* fetch int vector */
@@ -1667,10 +1661,9 @@ int main(int argc, char **argv) {
       int 21h
       mov myseg, es
       mov myoff, bx
-      /* restore AX, BX and ES */
+      /* restore BX and ES */
       pop es
       pop bx
-      pop ax
     }
     int2fptr = (unsigned char far *)MK_FP(myseg, myoff) + 24; /* the interrupt handler's signature appears at offset 24 (this might change at each source code modification) */
     /* look for the "MVet" signature */
@@ -1680,9 +1673,7 @@ int main(int argc, char **argv) {
     }
     /* get the ptr to TSR's data */
     _asm {
-      push ax
       push bx
-      push cx
       pushf
       mov ah, etherdfsid
       mov al, 1
@@ -1696,9 +1687,7 @@ int main(int argc, char **argv) {
       mov mydataseg, dx
       fail:
       popf
-      pop cx
       pop bx
-      pop ax
     }
     if (myseg == 0xffffu) {
       #include "msg/tsrcomfa.c"
@@ -1710,10 +1699,8 @@ int main(int argc, char **argv) {
     myseg = tsrdata->prev_2f_handler_seg;
     myoff = tsrdata->prev_2f_handler_off;
     _asm {
-      /* save AX, DS and DX */
-      push ax
+      /* save DS */
       push ds
-      push dx
       /* set DS:DX */
       mov ax, myseg
       push ax
@@ -1722,16 +1709,13 @@ int main(int argc, char **argv) {
       /* call INT 21h,25h for int 2Fh */
       mov ax, 252Fh
       int 21h
-      /* restore AX, DS and DX */
-      pop dx
+      /* restore DS */
       pop ds
-      pop ax
     }
     /* get the address of the packet driver routine */
     pktint = tsrdata->pktint;
     _asm {
-      /* save AX, BX and ES */
-      push ax
+      /* save BX and ES */
       push bx
       push es
       /* fetch int vector */
@@ -1740,10 +1724,9 @@ int main(int argc, char **argv) {
       int 21h
       mov myseg, es
       mov myoff, bx
-      /* restore AX, BX and ES */
+      /* restore BX and ES */
       pop es
       pop bx
-      pop ax
     }
     pktdrvcall = myseg;
     pktdrvcall <<= 16;
@@ -1751,9 +1734,8 @@ int main(int argc, char **argv) {
     /* unregister packet driver */
     myhandle = tsrdata->pkthandle;
     _asm {
-      /* save AX and BX */
+      /* save AX */
       push ax
-      push bx
       /* prepare the release_type() call */
       mov ah, 3 /* release_type() */
       mov bx, myhandle
@@ -1763,8 +1745,7 @@ int main(int argc, char **argv) {
       pushf
       cli
       call dword ptr pktdrvcall
-      /* restore AX and BX */
-      pop bx
+      /* restore AX */
       pop ax
     }
     /* set all mapped drives as 'not available' */
@@ -1832,7 +1813,6 @@ int main(int argc, char **argv) {
   _asm {
     /* save registers on the stack */
     push es
-    push cx
     push si
     push di
     pushf
@@ -1843,19 +1823,16 @@ int main(int argc, char **argv) {
     cld                /* clear direction flag (increment si/di) */
     mov es, newdataseg /* load es with newdataseg */
     rep movsb          /* execute copy DS:SI -> ES:DI */
-    /* restore registers (but NOT es, instead save it into AX for now) */
+    /* restore registers (but NOT es for now) */
     popf
     pop di
     pop si
-    pop cx
-    pop ax
     /* switch to the new DS _AND_ SS now */
     push es
     push es
     pop ds
     pop ss
     /* restore ES */
-    push ax
     pop es
   }
 
@@ -1981,14 +1958,12 @@ int main(int argc, char **argv) {
   _asm {
     cli
     mov ax, 252fh /* AH=set interrupt vector  AL=2F */
-    push ds /* preserve DS and DX */
-    push dx
+    push ds /* preserve DS */
     push cs /* set DS to current CS, that is provide the */
     pop ds  /* int handler's segment */
     mov dx, offset inthandler /* int handler's offset */
     int 21h
-    pop dx /* restore DS and DX to previous values */
-    pop ds
+    pop ds /* restore DS to previous value */
     sti
   }
 
@@ -2002,13 +1977,12 @@ int main(int argc, char **argv) {
    * last (partially used) paragraph. */
   _asm {
     mov ax, 3100h  /* AH=31 'terminate+stay resident', AL=0 exit code */
-    mov dx, offset begtextend /* DX = offset of resident code end     */
-    add dx, 256    /* add size of PSP (256 bytes)                     */
-    add dx, 15     /* add 15 to avoid truncating last paragraph       */
-    shr dx, 1      /* convert bytes to number of 16-bytes paragraphs  */
-    shr dx, 1      /* the 8086/8088 CPU supports only a 1-bit version */
-    shr dx, 1      /* of SHR, so I have to repeat it as many times as */
-    shr dx, 1      /* many bits I need to shift.                      */
+    mov dx, offset begtextend + 256 + 15 /* DX = offset of resident code end          */
+                                         /* add size of PSP (256 bytes)               */
+                                         /* add 15 to avoid truncating last paragraph */
+    mov cl, 4      /* convert bytes to number of 16-bytes paragraphs  */
+    shr dx, cl     /* the 8086/8088 CPU supports only a 1-bit version
+                    * of SHR so I use the reg,CL method               */
     int 21h
   }
 
