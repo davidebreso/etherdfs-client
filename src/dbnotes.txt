@@ -95,8 +95,8 @@ code copied in the upper memory block should be able to access the data and
 stack in the upper memory block. Instead of using self-modifying code, I opted
 for a cleaner solution: I allocated a global variable into the resident _CODE_
 segment to store the new data segment in upper memory. Then a little assembly
-code at the top of the interrupt handler and of the packet driver handler loads
-DS and SS with the new segment.
+code at the top of the interrupt and packet driver handlers loads DS and SS with
+the new segment.
 
 Using this apporach, EtherDFS requires only a little more than 7K of contiguous
 free upper memory to be loaded high.

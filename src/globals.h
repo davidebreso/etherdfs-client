@@ -111,6 +111,5 @@ extern unsigned char glob_multiplexid;
 extern void __declspec(naked) far pktdrv_recv(void);
 extern unsigned short sendquery(unsigned char query, unsigned char drive, unsigned short bufflen, unsigned char **replyptr, unsigned short **replyax, unsigned int updatermac);
 extern void __interrupt __far inthandler(union INTPACK r);
-extern void begtextend(void);
 
 #endif

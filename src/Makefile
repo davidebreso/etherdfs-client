@@ -1,14 +1,12 @@
 #
-# Makefile for etherdfs, requires Open Watcom v1.9
+# Makefile for etherdfs, requires Open Watcom v2
 # Copyright (C) 2017 Mateusz Viste
+# Copyright (C) 2021 Davide Bresolin
 #
 # http://etherdfs.sourceforge.net
 #
 
 all: etherdfs.exe
-
-#genmsg.exe: genmsg.c version.h
-#	wcl -y -0 -s -d0 -lr -ms -we -wx -os genmsg.c -fe=genmsg.exe
 
 genmsg: genmsg.c version.h
 	gcc -o genmsg genmsg.c
@@ -22,10 +20,6 @@ resident.obj: resident.c chint.h dosstruc.h globals.h
 etherdfs.obj: genmsg etherdfs.c chint.h dosstruc.h globals.h version.h
 	./genmsg
 	wcc -0 -s -d0 -ms -wx etherdfs.c -fo=etherdfs.obj
-
-etherdfs.com: genmsg etherdfs.c chint.obj dosstruc.h globals.h version.h
-	./genmsg
-	wcl -y -0 -s -d0 -lr -mt -wx -k1024 -fm=etherdfs.map -os chint.obj -os etherdfs.c -fe=etherdfs.com
 
 etherdfs.exe: genmsg etherdfs.obj chint.obj resident.obj
 	wlink system dos file chint.obj,resident.obj,etherdfs.obj option map=etherdfs name etherdfs order clname rdata clname code segment begtext segment _text clname far_data clname begdata
@@ -51,12 +45,14 @@ begtext.exe: begmain.c begtext.obj begtext.h
 # -fe     set output file name
 
 clean: .symbolic
-	if exist etherdfs.exe rm etherdfs.exe
-	if exist genmsg rm genmsg
+	rm -f etherdfs.exe
+	rm -f etherdfs.map
+	rm -f genmsg
+	rm -rf ./msg
 	rm *.obj
 
 pkg: .symbolic etherdfs.exe
-	if exist etherdfs.zip del etherdfs.zip
+	rm -f etherdfs.zip
 	zip -9 -k etherdfs.zip etherdfs.exe etherdfs.txt history.txt
-	if exist ethersrc.zip del ethersrc.zip
-	zip -9 -k ethersrc.zip *.h *.c *.asm *.txt makefile
+	rm -f ethersrc.zip del ethersrc.zip
+	zip -9 -k ethersrc.zip *.h *.c *.asm *.txt Makefile
