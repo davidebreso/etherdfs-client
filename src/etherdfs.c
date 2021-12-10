@@ -45,7 +45,6 @@ unsigned short residentcs;   /* segment of resident code */
 static int pktdrv_accesstype(void) {
   unsigned char cflag = 0;
   _asm {
-    int 3
     mov ax, 201h        /* AH=subfunction access_type(), AL=if_class=1(eth) */
     mov bx, 0ffffh      /* if_type = 0xffff means 'all' */
     mov dl, 0           /* if_number: 0 (first interface) */
@@ -557,7 +556,6 @@ int main(int argc, char **argv) {
   char buff[20];
   unsigned char far *mcbfptr;
 
-  _asm{ int 3 };
   /* set all drive mappings as 'unused' */
   for (i = 0; i < 26; i++) glob_data.ldrv[i] = 0xff;
 
