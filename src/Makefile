@@ -14,7 +14,7 @@ genmsg: genmsg.c version.h
 	gcc -o genmsg genmsg.c
 
 chint.obj: chint086.asm
-	wasm -0 chint086.asm -fo=chint.obj -mc
+	wasm -0 chint086.asm -fo=chint.obj -ms
 	
 resident.obj: resident.c chint.h dosstruc.h globals.h
 	wcc -0 -s -d0 -ms -wx resident.c -fo=resident.obj
@@ -51,12 +51,14 @@ begtext.exe: begmain.c begtext.obj begtext.h
 # -fe     set output file name
 
 clean: .symbolic
-	if exist etherdfs.exe rm etherdfs.exe
-	if exist genmsg rm genmsg
+	rm -f etherdfs.exe
+	rm -f etherdfs.map
+	rm -f genmsg
+	rm -rf ./msg
 	rm *.obj
 
 pkg: .symbolic etherdfs.exe
-	if exist etherdfs.zip del etherdfs.zip
+	rm -f etherdfs.zip
 	zip -9 -k etherdfs.zip etherdfs.exe etherdfs.txt history.txt
-	if exist ethersrc.zip del ethersrc.zip
-	zip -9 -k ethersrc.zip *.h *.c *.asm *.txt makefile
+	rm -f ethersrc.zip del ethersrc.zip
+	zip -9 -k ethersrc.zip *.h *.c *.asm *.txt Makefile

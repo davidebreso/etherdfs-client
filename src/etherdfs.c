@@ -34,24 +34,27 @@
 /* this function obviously does nothing - but I need it because it is a
  * 'low-water' mark for the end of my resident code (so I know how much memory
  * exactly I can trim when going TSR) */
-void begtextend(void) {
+static void begtextend(void) {
 }
+
+unsigned short residentcs;   /* segment of resident code */
 
 /* registers a packet driver handle to use on subsequent calls */
 static int pktdrv_accesstype(void) {
   unsigned char cflag = 0;
-
   _asm {
+    int 3
     mov ax, 201h        /* AH=subfunction access_type(), AL=if_class=1(eth) */
     mov bx, 0ffffh      /* if_type = 0xffff means 'all' */
     mov dl, 0           /* if_number: 0 (first interface) */
-    /* DS:SI should point to the ethertype value in network byte order */
-    mov si, offset glob_pktdrv_sndbuff + 12 /* I don't set DS, it's good already */
-    mov cx, 2           /* typelen (ethertype is 16 bits) */
     /* ES:DI points to the receiving routine */
-    push cs /* write segment of pktdrv_recv into es */
-    pop es
+    mov es, residentcs   /* write segment of pktdrv_recv into es */
     mov di, offset pktdrv_recv
+    /* DS:SI should point to the ethertype value in network byte order */
+    push ds             /* save DS */
+    mov ds, cs:glob_newds    /* Set DS to resident data area */
+    mov si, offset glob_pktdrv_sndbuff + 12 /* DS:SI points to packet type specification */
+    mov cx, 2            /* typelen (ethertype is 16 bits) */
     mov cflag, 1        /* pre-set the cflag variable to failure */
     /* int to variable vector is a mess, so I have fetched its vector myself
      * and pushf + cli + call far it now to simulate a regular int */
@@ -63,6 +66,7 @@ static int pktdrv_accesstype(void) {
     mov word ptr [glob_data + GLOB_DATOFF_PKTHANDLE], ax /* Pkt handle should be in AX */
     mov cflag, 0
     badluck:
+    pop ds              /* restore DS */
   }
 
   if (cflag != 0) return(-1);
@@ -224,7 +228,7 @@ static struct cdsstruct far *getcds(unsigned int drive) {
 
 /* primitive message output used instead of printf() to limit memory usage
  * and binary size */
-void outmsg(char *s) {
+static void outmsg(char *s) {
   _asm {
     mov ah, 9h  /* DOS 1+ - WRITE STRING TO STANDARD OUTPUT */
     mov dx, s   /* small memory model: no need to set DS, 's' is an offset */
@@ -511,7 +515,7 @@ static unsigned char findfreemultiplex(unsigned char *presentflag) {
  * Then: (sizeof(RESDATA) + sizeof(BEGTEXT) + sizeof(PSP) + 15) / 16
  * PSP is 256 bytes of course. And +15 is needed to avoid truncating the
  * last (partially used) paragraph. */
-unsigned short get_residentsize() {
+static unsigned short get_residentsize() {
   unsigned short res = 0;
   _asm {
     push ax        /* save AX                                         */
@@ -532,7 +536,7 @@ unsigned short get_residentsize() {
 }
 
 /* Compute the segment of the upper memory code */
-unsigned short get_upperds(unsigned short upperseg) {
+static unsigned short get_upperds(unsigned short upperseg) {
   unsigned short res = 0;
   _asm {
     push ax        /* save AX                                         */
@@ -556,7 +560,6 @@ int main(int argc, char **argv) {
   int i;
   unsigned short upperseg;     /* segment of upper memory block to load high */
   unsigned short residentsize = get_residentsize();
-  unsigned short residentcs;   /* segment of resident code */
   unsigned short old_pspseg;    /* PSP of low memory portion of the program */
   char buff[20];
   unsigned char far *mcbfptr;
@@ -918,6 +921,22 @@ int main(int argc, char **argv) {
       pop ax
       pop es
       pop ds
+    }
+    /* Free the packet driver */
+    pktdrv_free();
+    /* Set new packet driver handle to upper memory */
+    if(pktdrv_accesstype() != 0) {
+      /* Relocation of packet driver failed.
+       * Set all mapped drives as 'not available' */
+      for (i = 0; i < 26; i++) {
+        if (glob_data.ldrv[i] == 0xff) continue;
+        cds = getcds(i);
+        if (cds != NULL) cds->flags = 0;
+      }
+      /* Release upper memory block */
+      freeseg(upperseg);
+      #include "msg/relfail.c"
+      return(1);
     }
   }
 
