@@ -75,7 +75,10 @@ int main(void) {
   }
 
   genmsg("msg/help.c",
-    "EtherDFS v" PVER " / Copyright (C) " PDATE " Mateusz Viste, " DBDATE " Davide Bresolin\r\n"
+    "EtherDFS v" PVER "\r\n"
+    "  Copyright (C) " PDATE " Mateusz Viste\r\n"
+    "  Copyright (C) " MODATE " Michael Ortmann\r\n"
+    "  Copyright (C) " DBDATE " Davide Bresolin\r\n"
     "A network drive for DOS, running over raw ethernet\r\n"
     "\r\n"
     "Usage: etherdfs SRVMAC rdrv-ldrv [rdrv2-ldrv2 ...] [options]\r\n"

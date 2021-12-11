@@ -62,75 +62,70 @@ unsigned char glob_multiplexid;
 /* an INTPACK structure used to store registers as set when INT2F is called */
 union INTPACK glob_intregs;
 
-/* copies l bytes from *s to *d */
-static void __declspec(naked) copybytes(void far *d, void far *s, unsigned int l) {
-/*  while (l != 0) {
-    l--;
-    *(unsigned char far *)d = *(unsigned char far *)s;
-    d = (unsigned char far *)d + 1;
-    s = (unsigned char far *)s + 1;
-  }
-*/
-  _asm{
-      /* Save registers and flags in the stack */
-      push ds
-      push es
-      pushf
-      cld                 /* clear direction flag (increment si/di) */
-      xchg ax, cx        /* CX contains the number of bytes to copy 
-                          * AX the segment of the destination */
-      mov es, ax         /* Set segment of destination */
-      mov ds, dx         /* Set segment of source */
-      rep movsb          /* execute copy DS:SI -> ES:DI */
-      /* restore registers and flags */
-      popf
-      pop es
-      pop ds
-  };
-}
-#pragma aux copybytes parm [cx di] [dx si] [ax] modify exact [ax cx di si] nomemory;
-
-static unsigned short __declspec(naked) mystrlen(void far *s) {
-/*  unsigned short res = 0;
-  while (*(unsigned char far *)s != 0) {
-    res++;
-    s = ((unsigned char far *)s) + 1;
-  }
-  return(res);
-*/
+/* copies len bytes from *src to *dst */
+static void __declspec(naked) copybytes(void far *dst, void far *src, unsigned int len) {
   _asm {
-    /* Save ES and flags into the stack */
-    push es
+    /* Save registers and flags into the stack */
+    push ds
     pushf
     cld                /* clear direction flag (increment si/di) */
-    mov es, cx         /* Set segment of string */
+    mov ds, dx         /* load segment of source */
+    rep movsb          /* copy CX bytes from DS:SI -> ES:DI */
+    /* restore flags and registers */
+    popf
+    pop ds
+    ret
+  }   
+}
+#pragma aux copybytes parm [es di] [dx si] [cx] modify exact [cx di si] nomemory;
+
+static unsigned short __declspec(naked) mystrlen(void far *s) {
+  _asm {
+    /* Save registers and flags into the stack */
+    pushf
+    cld                /* clear direction flag (increment si/di) */
     mov al, 0          /* Zero terminator */
     mov cx, 0xFFFF     /* CX count string length */
     repne scasb        /* scan string to find zero terminator */
     neg cx             /* string length is (-CX - 2) */
     dec cx
     dec cx
-    /* restore flags and ES */
+    /* restore flags and registers */
     popf
-    pop es
+    ret
   }  
 }
-#pragma aux mystrlen parm [cx di] value [cx] modify exact [al cx di] nomemory;
+#pragma aux mystrlen parm [es di] value [cx] modify exact [ax cx di] nomemory;
 
 /* returns -1 if the NULL-terminated s string contains any wildcard (?, *)
  * character. otherwise returns the length of the string. */
-static int len_if_no_wildcards(char far *s) {
-  int r = 0;
-  for (;;) {
-    switch (*s) {
-      case 0: return(r);
-      case '?':
-      case '*': return(-1);
-    }
-    r++;
-    s++;
+static int __declspec(naked) len_if_no_wildcards(char far *s) {
+  _asm {
+    /* Save registers and flags into the stack */
+    push ds
+    pushf
+    cld               /* clear direction flag (increment si/di) */
+    mov ds, cx        /* load segment of string */
+    xor cx, cx        /* CX = 0 */
+  next:
+    lodsb             /* load byte at DS:SI into AL */
+    test  al,al       /* is zero? */
+    jz end            /* return string length */
+    inc cx            /* it is a character, increment cx */
+    cmp al,'?'        /* is '?' ? */
+    je wildcard
+    cmp al, '*'       /* is '*' ? */
+    jne next          /* if not, continue with next char */
+  wildcard:
+    mov cx, -1
+  end:
+    /* restore flags and registers */
+    popf
+    pop ds 
+    ret   
   }
 }
+#pragma aux len_if_no_wildcards parm [cx si] value [cx] modify exact [al cx si] nomemory;
 
 /* computes a BSD checksum of l bytes at dataptr location */
 __declspec(naked) static unsigned short bsdsum(unsigned char *dataptr, unsigned short l) {
