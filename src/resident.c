@@ -70,7 +70,10 @@ static void __declspec(naked) copybytes(void far *dst, void far *src, unsigned i
     pushf
     cld                /* clear direction flag (increment si/di) */
     mov ds, dx         /* load segment of source */
-    rep movsb          /* copy CX bytes from DS:SI -> ES:DI */
+    shr cx, 1          /* number of words to copy */
+    rep movsw          /* copy CX words from DS:SI -> ES:DI */
+    adc cx, cx         /* see if 1 more byte to copy */
+    rep movsb          /* do repeat copy */
     /* restore flags and registers */
     popf
     pop ds

@@ -514,10 +514,9 @@ static unsigned short get_residentsize() {
     mov ax, offset begtextend /* AX = offset of resident code end     */
     add ax, 256    /* add size of PSP (256 bytes)                     */
     add ax, 15     /* add 15 to avoid truncating last paragraph       */
-    shr ax, 1      /* convert bytes to number of 16-bytes paragraphs  */
-    shr ax, 1      /* the 8086/8088 CPU supports only a 1-bit version */
-    shr ax, 1      /* of SHR, so I have to repeat it as many times as */
-    shr ax, 1      /* many bits I need to shift.                      */
+    mov cl, 4      /* convert bytes to number of 16-bytes paragraphs  */
+    shr ax, cl     /* the 8086/8088 CPU supports only a 1-bit version
+                    * of SHR so I use the reg,CL method               */
     /* Add size of RESDATA (in paragraphs) by subtracting CS and DS   */
     add ax, seg begtextend    /* add code segment                     */
     sub ax, seg glob_data     /* subtract data segment                */
@@ -880,18 +879,18 @@ int main(int argc, char **argv) {
       push di
       pushf
       /* copy the memory block */
-      mov cx, residentsize /* cx is number of paragraphs to copy             */
-      shl cx, 1           /* convert paragraphs to number of bytes           */
-      shl cx, 1           /* the 8086/8088 CPU supports only a 1-bit version */
-      shl cx, 1           /* of SHL, so I have to repeat it as many times as */
-      shl cx, 1           /* many bits I need to shift.                      */    
+      mov ax, residentsize  /* ax is number of paragraphs to copy             */
+      mov cl, 3           /* convert paragraphs to number of words            */
+      shl ax, cl          /* the 8086/8088 CPU supports only a 1-bit version  */
+                          /* of SHR so I use the reg,CL method                */
+      mov cx, ax          /* CX is number of words to copy                    */    
       xor si, si          /* si = 0*/
       xor di, di          /* di = 0 */
       cld                 /* clear direction flag (increment si/di) */
       mov ax, old_pspseg  /* load ds with low memory PSP segment */           
       mov ds, ax          
       mov es, upperseg    /* load es with upperseg */
-      rep movsb           /* execute copy DS:SI -> ES:DI */
+      rep movsw           /* execute copy DS:SI -> ES:DI */
       /* restore registers */
       popf
       pop di
