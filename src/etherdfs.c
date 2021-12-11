@@ -626,11 +626,12 @@ int main(int argc, char **argv) {
       pop es
       pop bx
     }
-    /* the interrupt handler's signature appears at offset 23 
+    /* the interrupt handler's signature appears at offset 26 
        (this might change at each source code modification) */
-    int2fptr = (unsigned char far *)MK_FP(myseg, myoff) + 23; 
+    int2fptr = (unsigned char far *)MK_FP(myseg, myoff) + 26; 
     /* look for the "MVet" signature */
-/* DEBUG: print signature
+    /* DEBUG: print signature */
+    /* 
     for(i=0; i < 4; ++i) {
        buff[i] = int2fptr[i];
     }
@@ -638,7 +639,8 @@ int main(int argc, char **argv) {
     buff[5] = '\n';
     buff[6] = '$';
     outmsg(buff);
- */
+    */
+
     if ((int2fptr[0] != 'M') || (int2fptr[1] != 'V') || (int2fptr[2] != 'e') || (int2fptr[3] != 't')) {
       #include "msg/othertsr.c";
       return(1);

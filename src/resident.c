@@ -63,23 +63,59 @@ unsigned char glob_multiplexid;
 union INTPACK glob_intregs;
 
 /* copies l bytes from *s to *d */
-static void copybytes(void far *d, void far *s, unsigned int l) {
-  while (l != 0) {
+static void __declspec(naked) copybytes(void far *d, void far *s, unsigned int l) {
+/*  while (l != 0) {
     l--;
     *(unsigned char far *)d = *(unsigned char far *)s;
     d = (unsigned char far *)d + 1;
     s = (unsigned char far *)s + 1;
   }
+*/
+  _asm{
+      /* Save registers and flags in the stack */
+      push ds
+      push es
+      pushf
+      cld                 /* clear direction flag (increment si/di) */
+      xchg ax, cx        /* CX contains the number of bytes to copy 
+                          * AX the segment of the destination */
+      mov es, ax         /* Set segment of destination */
+      mov ds, dx         /* Set segment of source */
+      rep movsb          /* execute copy DS:SI -> ES:DI */
+      /* restore registers and flags */
+      popf
+      pop es
+      pop ds
+  };
 }
+#pragma aux copybytes parm [cx di] [dx si] [ax] modify exact [ax cx di si] nomemory;
 
-static unsigned short mystrlen(void far *s) {
-  unsigned short res = 0;
+static unsigned short __declspec(naked) mystrlen(void far *s) {
+/*  unsigned short res = 0;
   while (*(unsigned char far *)s != 0) {
     res++;
     s = ((unsigned char far *)s) + 1;
   }
   return(res);
+*/
+  _asm {
+    /* Save ES and flags into the stack */
+    push es
+    pushf
+    cld                /* clear direction flag (increment si/di) */
+    mov es, cx         /* Set segment of string */
+    mov al, 0          /* Zero terminator */
+    mov cx, 0xFFFF     /* CX count string length */
+    repne scasb        /* scan string to find zero terminator */
+    neg cx             /* string length is (-CX - 2) */
+    dec cx
+    dec cx
+    /* restore flags and ES */
+    popf
+    pop es
+  }  
 }
+#pragma aux mystrlen parm [cx di] value [cx] modify exact [al cx di] nomemory;
 
 /* returns -1 if the NULL-terminated s string contains any wildcard (?, *)
  * character. otherwise returns the length of the string. */
