@@ -1,159 +1,122 @@
 
-                   ETHERDFS - THE ETHERNET DOS FILE SYSTEM
-                       http://etherdfs.sourceforge.net
+                === Improving the EtherDFS DOS client === 
+                            Davide Bresolin
+
+EtherDFS is a client/server filesystem that allows a modern host (the server) to
+easily share files with an old PC running DOS. The original client TSR was
+written by Mateusz Viste in 2017 and 2018. In 2020, Michael Ortmann added some
+patches to the code to fix a few bugs and reduce the memory footprint.
+
+The source code can be compiled with OpenWatcom v1.9 on a DOS machine, or a DOS
+emulator. To write the EhterDFS TSR in C, Mateusz Viste had to use a few tricks 
+to limit the memory footprint as much as possible, that are described in 
+memnotes.txt.
+
+This document describes the changes I made to the original source code for two
+reasons: to compile the TSR with OpenWatcom v2 in a modern OSX machine, and to
+remove some of the tricks used by Mateusz while keeping the memory footprint
+small.
+
+*** License ***
+
+  MIT License
+  Copyright (C) 2017, 2018 Mateusz Viste
+  Copyright (c) 2020 Michael Ortmann
+  Copyright (c) 2021 Davide Bresolin
+
+*** Websites ***
+
+  https://github.com/davidebreso/etherdfs-client
+  https://gitlab.com/mortmann/etherdfs
+  http://etherdfs.sourceforge.net
 
 
-EtherDFS is an 'installable filesystem' TSR for DOS. It maps a drive from a
-remote computer (typically Linux-based) to a local drive letter, using raw
-ethernet frames to communicate. For years, I was using LapLink to transfer
-files between my various "retro" computers. It works, yes, but it's also
-annoyingly slow and requires constant attention. One day I thought, "Wouldn't
-it be amazing if all my DOS PCs could share a common network drive, similarly
-to how NFS operates in the *nix world?". This day EtherDFS was born. I clearly
-didn't invent anything - the concept has been around almost as long as the
-first IBM PC, and several commercial products addressed that need in the past.
-I am not aware, however, of any free and open-source solution. Besides, all
-the commercial solutions I know require to set up a pretty complex network
-environment first, while EtherDFS doesn't need anything more than just a
-packet driver.
+*** Compile the code on a modern machine ***
 
-EtherDFS is the "client" part, ie. the TSR running on the client DOS computer.
-The client requires an EtherSRV instance to communicate with. Currently, an
-implementation of EtherSRV exists only for Linux (ethersrv-linux).
+This was easy, and required only a few changes to the code:
 
-Since EtherDFS runs over raw ethernet, it doesn't need any TCP/IP stack. It
-only requires a working packet driver. The catch of using raw ethernet frames
-is that EtherDFS is, by design, unable to communicate outside of a single LAN.
-In some context this might actually be a strenght, you don't need to worry
-that your EtherDFS transfer will somehow leak outside your LAN - it's simply
-not possible.
+    - modify the Makefile to work on a unix environment 
+    - change path separators to unix forward slashes '/' 
+    - compile genmsg.c with Apple's clang, since Open Watcom cannot generate 
+      OSX executables
 
-Syntax:
-  etherdfs SRVMAC rdrv1-ldrv1 [rdrv2-ldrv2] [rdrvX-ldrvX] [options]
-  etherdfs /u [/q]
+*** Keeping the memory footprint small ***
 
-  where:
-  SRVMAC  is the MAC address of the file server EtherDFS will connect to. You
-          can also use '::' so EtherDFS will try to auto-discover the server
-          present in your LAN.
-  rdrv    is the remote drive you want to access on the EtherSRV server.
-  ldrv    is a local drive letter where the remote filesystem will be mapped.
+EtherDFS uses the INT 21h,31h DOS call to go resident. This call also allows to
+trim any excess memory that won't be needed by the application any more. To
+minimize the memory footprint it is necessary to place all resident code and
+data, and also the stack before the transient part of the application.
 
-Available options:
-  /p=XX   use the network packet driver XX (autodetected in the range 60h..80h
-          if not specified)
-  /n      disable EtherDFS cksum - use only if you are 100% that your network
-          hardware is working right and you really need to squeeze out some
-          additional performance (this doesn't disable Ethernet CRC)
-  /q      quiet mode: print nothing on screen if loaded/unloaded successfully
-  /u      unload EtherDFS from memory
+You can instruct OpenWatcom to place the resident code in the segment BEGTEXT,
+that is always the first segment of the memory map. Placing the resident data
+and the stack before the transient code is much more complicated. The trick used
+in the original code is to allocate a separate segment through an INT 21h,48h
+call, and force EtherDFS to use THAT as its DATA & STACK segment by "patching"
+portions of the code at runtime.
 
-Examples:
-  etherdfs 6d:4f:4a:4d:49:52 C-F /q
-  etherdfs :: C-X D-Y E-Z /p=80
+To remove the separate data and stack segment and the self-modifying code, I
+forced OpenWatcom to place the resident data in the segment RESDATA of custom
+class RDATA, and instructed the linker to place RESDATA at the start of the
+memory map with the ORDER directive.
 
-Note: EtherDFS arguments are case-insensitive, and can be passed in any order.
+Still, the stack remained at the top of the memory. Forcing the linker to place
+the stack before the code segments caused a lot of problems. I solved the
+problem by allocating 1024 bytes in the resident data
+segment to be used as stack space when the progam go resident. The interrupt
+handler routine takes care of pointing the SS and SP registers to the top of
+this 'resident stack space' before processing the int 2F call.
 
+*** Trimming the excess memory ***
 
-===[ Requirements ]===========================================================
+The DOS "go resident" call expects the amount of memory that needs to be kept in
+16-bytes units (paragraphs). To know how many paragraphs the resident code and
+data really takes, I used two little tricks to figure it out at compile time.
 
-EtherDFS hardware/software requirements:
- - An 8086/8088 compatible CPU
- - MS-DOS 5.0+ or compatible
- - 8 KiB of available conventional memory (can be loaded high)
- - An Ethernet interface and its packet driver
+The linker places the various code and data segments of the program in the following
+order: 
 
-ethersrv, on the other hand, requires a reasonably modern Linux system.
-Future versions will probably provide a DOS version of ethersrv, too.
+    RESDATA     (resident data and stack) 
+    BEGTEXT     (resident code) 
+    _TEXT       (transient code)
+    ....        (transient data and other stuff)
+    STACK       (transient stack)
 
+Only the RESDATA and BEGTEXT segments need to be kept when going resident,
+everything else can be discarded. The code uses the small memory model, where
+the DS register points to the start of RESDATA (the first data portion of the
+map) and the CS register points to the start of BEGTEXT (the first data portion
+of the map). Hence, the size of RESDATA (in paragraphs) is given by the
+difference between CS and DS.
 
-===[ Can I use other networking software while EtherDFS is loaded? ]==========
+To get the size of the resident code I used the trick already used by Mateusz
+Viste: insert a code symbol (of an empty function) to the start of the transient
+code. The offset of this simbol is the size of the resident code.
 
-EtherDFS provides low-level I/O disk connectivity through networking. As such,
-it might be adviseable to dedicate a single network interface on your PC
-solely for the purpose of handling EtherDFS communications - this would
-provide the best possible performance and reliability. However, if your PC has
-only one ethernet interface, you still can use EtherDFS simulteanously with
-other networking applications - EtherDFS will happily share access to the
-packet driver with any other applications, but in such case performance might
-not be optimal. Take note that, for such network sharing to be possible, your
-other networking software must be written in a way that does not require
-exclusive control over the packet driver.
+Finally, add the size of the PSP (256 bytes) to get the total amount of resident
+memory.
 
+*** Loading high ***
 
-===[ Why Ethernet ]===========================================================
+EtherDFS can be loaded high with the help of the LOADHIGH command of Dos 5+.
+However, LOADHIGH needs a continuous block of upper memory large enough for
+the whole program, not only for the resident portion. This requirement may
+prevent EtherDFS to be loaded high even if there is enough free upper memory for
+the resident part of the program. My version of EtherDFS uses a better
+solution: the program is loaded in conventional memory, it allocates only the
+required memory in the upper area, and moves the resident part there before going
+resident. Thanks to this technique it can be loaded high in cases where LOADHIGH
+fails.
 
-This is the first question I get whenever I introduce EtherDFS to someone:
-"Why do you use stupid Ethernet instead of IP/UDP/IPv6/IPX/whatever ?"
+The code for loading the TSR high is based on the 'Skeleton of TSR self-loading
+to upper memory' at http://vitsoft.info/tsrup.htm. Allocating a separate memory
+block reintroduced some of the problems that Mateusz Viste faced: the resident
+code copied in the upper memory block should be able to access the data and
+stack in the upper memory block. Instead of using self-modifying code, I opted
+for a cleaner solution: I allocated a global variable into the resident _CODE_
+segment to store the new data segment in upper memory. Then a little assembly
+code at the top of the interrupt and packet driver handlers loads DS and SS with
+the new segment.
 
-I thought about the pros and cons of the multiple technical possibilities, and
-the advantages of using raw Ethernet frames vastly outweighted the
-constraints. It is to be noted that Ethernet is ubiquitious, has been for the
-past 30 years, and is likely to stay here for a while. Here below I paste my
-"pros & cons" list, so my reasons should become clear.
+Using this apporach, EtherDFS requires only a little more than 7K of contiguous
+free upper memory to be loaded high.
 
-Pros:
- - Very simple to parse and process = faster, lower memory footprint,
- - No dependencies: doesn't require any TCP/IP stack, only a packet driver,
- - Allows EtherDFS to share a single NIC with other DOS networking software,
- - IP-agnostic: the network can operate IPv4, IPv6, IPX, or anything else,
- - Makes it possible to auto-discover an EtherSRV server on the LAN.
-
-Cons:
- - Unrouteable, meaning that it cannot work outside of a single LAN (running
-   EtherDFS over a long-distance network would be unadviseable anyway for
-   reliability and latency reasons).
-
-
-===[ Is it secure? ]==========================================================
-
-Shortly said: no. EtherDFS is designed by a hobbyist, for hobbyists. It is not
-meant to be used in an environment where security is required. The EtherDFS
-protocol transfers all data as plain text, and doesn't have any provisions for
-authentication nor access control. It is worth noting that a potentially
-desirable side effect of using raw Ethernet for communication is the fact that
-EtherDFS data won't ever make it outside your LAN, simply because it is
-unrouteable.
-
-
-===[ But is it still safe for my data? ]======================================
-
-Should be. I did my best to ensure that EtherDFS does not lead to any
-corruption of data, or any other troubles. You have to keep in mind though,
-that EtherDFS is a program that takes root deeply in the (often undocumented)
-internals of DOS, and as such, is a quite complex beast. Besides, every
-program has bugs, this one is surely not an exception. I can only recommend
-that you perform periodic backups of your data, just in case.
-
-
-===[ Contact the author ]=====================================================
-
-I'm always happy to get feedback about my software: bug reports, feature
-requests, or simply knowing that you use it and it works for you.
-You won't get my e-mail address here, but you should find contact pointers to
-me on my website: http://mateusz.viste.fr.
-
-
-===[ License ]================================================================
-
-EtherDFS is distributed under the terms of the MIT License, as listed below.
-
-Copyright (C) 2017, 2018 Mateusz Viste
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
