@@ -6,6 +6,20 @@
 # http://etherdfs.sourceforge.net
 #
 
+# Compiler settings to optimize for execution time
+# CFLAGS=-0 -s -d0 -ms -wx -ot -DINTSIG_OFF=26
+
+# Compiler settings to optimize for memory footprint
+CFLAGS=-0 -s -d0 -ms -wx -os -DINTSIG_OFF=24
+
+# -0      generate code for 8086
+# -s      disable stack overflow checks
+# -d0     don't include debugging information
+# -ms     small memory model
+# -wx     set warning level to max
+# -os     optimize for size
+# -ot     optimize for execution time
+
 all: etherdfs.exe
 
 genmsg: genmsg.c version.h
@@ -15,34 +29,20 @@ chint.obj: chint086.asm
 	wasm -0 chint086.asm -fo=chint.obj -ms
 	
 resident.obj: resident.c chint.h dosstruc.h globals.h
-	wcc -0 -s -d0 -ms -wx resident.c -fo=resident.obj
+	wcc $CFLAGS resident.c -fo=resident.obj
 	
 etherdfs.obj: genmsg etherdfs.c chint.h dosstruc.h globals.h version.h
 	./genmsg
-	wcc -0 -s -d0 -ms -wx etherdfs.c -fo=etherdfs.obj
+	wcc $CFLAGS etherdfs.c -fo=etherdfs.obj
 
 etherdfs.exe: genmsg etherdfs.obj chint.obj resident.obj
 	wlink system dos file chint.obj,resident.obj,etherdfs.obj option map=etherdfs name etherdfs order clname rdata clname code segment begtext segment _text clname far_data clname begdata
 	upx -9 --8086 etherdfs.exe
 
-begtext.obj: begtext.c begtext.h
-	wcc -0 -s -d0 -ms -wx begtext.c -fo=begtext.obj	
-
-begtext.exe: begmain.c begtext.obj begtext.h
-	wcl -y -0 -s -d0 -lr -ms -wx -k1024 -fm=begtext.map -os begtext.obj begmain.c -fe=begtext.exe
-
-# -y      ignore the WCL env. variable, if any
-# -0      generate code for 8086
-# -s      disable stack overflow checks
-# -d0     don't include debugging information
-# -lr     compile to a DOS real-mode application
-# -ms     small memory model
-# -we     treat all warnings as errors
-# -wx     set warning level to max
-# -k1024  set stack size to 1024 bytes (for the non-resident part)
-# -fm=    generate a map file
-# -os     optimize for size
-# -fe     set output file name
+# system dos    compile to a DOS real-mode application
+# option map=   generate a map file
+# name          set output file name
+# order         set order of program segments
 
 clean: .symbolic
 	rm -f etherdfs.exe
@@ -56,3 +56,6 @@ pkg: .symbolic etherdfs.exe
 	zip -9 -k etherdfs.zip etherdfs.exe etherdfs.txt history.txt
 	rm -f ethersrc.zip del ethersrc.zip
 	zip -9 -k ethersrc.zip *.h *.c *.asm *.txt Makefile
+
+release: .symbolic etherdfs.exe
+	cp etherdfs.exe ../bin

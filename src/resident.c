@@ -159,9 +159,9 @@ __declspec(naked) static unsigned short bsdsum(unsigned char *dataptr, unsigned 
  * be modified. */
 void __declspec(naked) far pktdrv_recv(void) {
   _asm {
-    jmp skip
-    SIG db 'pktr'
-    skip:
+    // jmp skip
+    // SIG db 'pktr'
+    // skip:
     /* save DS and flags to stack */
     push ds  /* save old ds (I will change it) */
     push bx  /* save bx (I use it as a temporary register) */

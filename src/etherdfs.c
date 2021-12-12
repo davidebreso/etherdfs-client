@@ -625,9 +625,10 @@ int main(int argc, char **argv) {
       pop es
       pop bx
     }
-    /* the interrupt handler's signature appears at offset 26 
-       (this might change at each source code modification) */
-    int2fptr = (unsigned char far *)MK_FP(myseg, myoff) + 26; 
+    /* The interrupt handler's signature appears at offset INTSIG_OFF 
+     * The value is set by the Makefile and depends on the optimisation settings 
+     * and may change at each source code modification. */
+    int2fptr = (unsigned char far *)MK_FP(myseg, myoff) + INTSIG_OFF; 
     /* look for the "MVet" signature */
     /* DEBUG: print signature */
     /* 
@@ -843,78 +844,80 @@ int main(int argc, char **argv) {
     /* allocate a new segment in the upper memory area to use for resident code and data */
     upperseg = allocseg(residentsize);
     if (upperseg == 0) {
+      /* Upper memory allocation error, load in conventional memory */
       #include "msg/memfail.c"
-      return(1);
-    }
-    // printf("Upper segment at %04X\n", upperseg);
-    /* New resident data segment is upperseg + sizeof(PSP) in paragraphs 
-     * PSP is 256 bytes (16 paragraphs). */
-    glob_newds = upperseg + 16;
-    // printf("Upper resident data segment at %04X\n", glob_newds);
-    /* Get upper resident code segment */
-    residentcs = get_upperds(upperseg);
-    // printf("Upper resident code segment at %04X\n", residentcs);
+      args.flags &= ~ARGFL_LOADHIGH;
+    } else {
+      // printf("Upper segment at %04X\n", upperseg);
+      /* New resident data segment is upperseg + sizeof(PSP) in paragraphs 
+       * PSP is 256 bytes (16 paragraphs). */
+      glob_newds = upperseg + 16;
+      // printf("Upper resident data segment at %04X\n", glob_newds);
+      /* Get upper resident code segment */
+      residentcs = get_upperds(upperseg);
+      // printf("Upper resident code segment at %04X\n", residentcs);
 
-    /* Set name of the block owner in the MCB
-     * The Memory Control Block is 1 paragraph below upperseg
-     * At offset 8 in MCB should be the name of block owner. */
-    mcbfptr = (unsigned char far *)MK_FP(upperseg -1, 8); 
-    // printf("Upper MCB signature at %04X:%04X\n", FP_SEG(mcbfptr), FP_OFF(mcbfptr));  
-    for(i = 0; i < 8; i++) {
-      mcbfptr[i] = umb_ident[i];
-    }
-  
-    /* Set saved PSP segment to the upper memory block */
-    old_pspseg = glob_data.pspseg;
-    glob_data.pspseg = upperseg;
-    // printf("Upper PSP segment at %04X\n", glob_data.pspseg);
-    /* copy resident code and data into the upper memory segment */
-    _asm {
-      /* save registers on the stack */
-      push ds
-      push es
-      push ax
-      push cx
-      push si
-      push di
-      pushf
-      /* copy the memory block */
-      mov ax, residentsize  /* ax is number of paragraphs to copy             */
-      mov cl, 3           /* convert paragraphs to number of words            */
-      shl ax, cl          /* the 8086/8088 CPU supports only a 1-bit version  */
-                          /* of SHR so I use the reg,CL method                */
-      mov cx, ax          /* CX is number of words to copy                    */    
-      xor si, si          /* si = 0*/
-      xor di, di          /* di = 0 */
-      cld                 /* clear direction flag (increment si/di) */
-      mov ax, old_pspseg  /* load ds with low memory PSP segment */           
-      mov ds, ax          
-      mov es, upperseg    /* load es with upperseg */
-      rep movsw           /* execute copy DS:SI -> ES:DI */
-      /* restore registers */
-      popf
-      pop di
-      pop si
-      pop cx
-      pop ax
-      pop es
-      pop ds
-    }
-    /* Free the packet driver */
-    pktdrv_free();
-    /* Set new packet driver handle to upper memory */
-    if(pktdrv_accesstype() != 0) {
-      /* Relocation of packet driver failed.
-       * Set all mapped drives as 'not available' */
-      for (i = 0; i < 26; i++) {
-        if (glob_data.ldrv[i] == 0xff) continue;
-        cds = getcds(i);
-        if (cds != NULL) cds->flags = 0;
+      /* Set name of the block owner in the MCB
+       * The Memory Control Block is 1 paragraph below upperseg
+       * At offset 8 in MCB should be the name of block owner. */
+      mcbfptr = (unsigned char far *)MK_FP(upperseg -1, 8); 
+      // printf("Upper MCB signature at %04X:%04X\n", FP_SEG(mcbfptr), FP_OFF(mcbfptr));  
+      for(i = 0; i < 8; i++) {
+        mcbfptr[i] = umb_ident[i];
       }
-      /* Release upper memory block */
-      freeseg(upperseg);
-      #include "msg/relfail.c"
-      return(1);
+  
+      /* Set saved PSP segment to the upper memory block */
+      old_pspseg = glob_data.pspseg;
+      glob_data.pspseg = upperseg;
+      // printf("Upper PSP segment at %04X\n", glob_data.pspseg);
+      /* copy resident code and data into the upper memory segment */
+      _asm {
+        /* save registers on the stack */
+        push ds
+        push es
+        push ax
+        push cx
+        push si
+        push di
+        pushf
+        /* copy the memory block */
+        mov ax, residentsize  /* ax is number of paragraphs to copy             */
+        mov cl, 3           /* convert paragraphs to number of words            */
+        shl ax, cl          /* the 8086/8088 CPU supports only a 1-bit version  */
+                            /* of SHR so I use the reg,CL method                */
+        mov cx, ax          /* CX is number of words to copy                    */    
+        xor si, si          /* si = 0*/
+        xor di, di          /* di = 0 */
+        cld                 /* clear direction flag (increment si/di) */
+        mov ax, old_pspseg  /* load ds with low memory PSP segment */           
+        mov ds, ax          
+        mov es, upperseg    /* load es with upperseg */
+        rep movsw           /* execute copy DS:SI -> ES:DI */
+        /* restore registers */
+        popf
+        pop di
+        pop si
+        pop cx
+        pop ax
+        pop es
+        pop ds
+      }
+      /* Free the packet driver */
+      pktdrv_free();
+      /* Set new packet driver handle to upper memory */
+      if(pktdrv_accesstype() != 0) {
+        /* Relocation of packet driver failed.
+         * Set all mapped drives as 'not available' */
+        for (i = 0; i < 26; i++) {
+          if (glob_data.ldrv[i] == 0xff) continue;
+          cds = getcds(i);
+          if (cds != NULL) cds->flags = 0;
+        }
+        /* Release upper memory block */
+        freeseg(upperseg);
+        #include "msg/relfail.c"
+        return(1);
+      }
     }
   }
 
@@ -991,6 +994,7 @@ int main(int argc, char **argv) {
   /* If the TSR is loaded high, set the PSP to upper memory and deallocate low memory */
   if ((args.flags & ARGFL_LOADHIGH) != 0) {
     /* Set new PSP to upper memory */
+    // printf("Set new PSP to upper memory.\n");
     _asm {
       mov bx, upperseg    /* BX = new process PSP segment address */
       mov ah, 50h         /* INT 21,50 - Set Current Process ID */

@@ -85,10 +85,10 @@ int main(void) {
     "       etherdfs /u\r\n"
     "\r\n"
     "Options:\r\n"
-    "  /h      install EtherDFS in upper memory\r\n"
     "  /p=XX   use packet driver at interrupt XX (autodetect otherwise)\r\n"
     "  /n      disable EtherDFS checksums\r\n"
     "  /q      quiet mode (print nothing if loaded/unloaded successfully)\r\n"
+    "  /h      install EtherDFS in upper memory\r\n"
     "  /u      unload EtherDFS from memory\r\n"
     "\r\n"
     "Use '::' as SRVMAC for server auto-discovery.\r\n"
@@ -124,7 +124,7 @@ int main(void) {
     "drive letter.\r\n"
   );
 
-  genmsg("msg/memfail.c", "Upper memory alloc error!\r\n");
+  genmsg("msg/memfail.c", "Upper memory alloc error, loading TSR in conventional memory.\r\n");
 
   genmsg("msg/relfail.c", "Relocation to upper memory failed.\r\n");
 
