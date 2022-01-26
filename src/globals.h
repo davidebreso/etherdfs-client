@@ -23,6 +23,12 @@
   #define NULL (void *)0
 #endif
 
+/* define boolean constants */
+#ifndef TRUE
+  #define TRUE 1
+  #define FALSE 0
+#endif
+
 /* required size (in bytes) of the stack for the interrupt handler routine. 
  * Packet drivers tend to require a stack of several hundreds bytes at least
  * 1K should be safe... */

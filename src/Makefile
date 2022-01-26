@@ -50,6 +50,7 @@ clean: .symbolic
 	rm -f genmsg
 	rm -rf ./msg
 	rm *.obj
+	rm *.err
 
 pkg: .symbolic etherdfs.exe
 	rm -f etherdfs.zip

@@ -1,5 +1,11 @@
 EtherDFS changelog history
 
+v0.9.3.1 [2022-01-26]:
+ - add code of __GETDS to the resident code. From October 2021 version of WCC, this
+   function is called in the preamble of the interrupt routine.
+ - "write to file" requests with length 0 are forwarded to the server, so they can 
+   be used to truncate a file to the current file position by writing zero bytes.
+
 v0.9.3 [2021-12-12]:
  - fallback to loading in conventional memory if not enough upper memory available
  - added options in Makefile to compile with either speed or space optimisation
