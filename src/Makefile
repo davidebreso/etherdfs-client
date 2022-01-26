@@ -7,10 +7,10 @@
 #
 
 # Compiler settings to optimize for execution time
-# CFLAGS=-0 -s -d0 -ms -wx -ot -DINTSIG_OFF=26
+CFLAGS=-0 -s -d0 -ms -wx -ot -DINTSIG_OFF=24
 
 # Compiler settings to optimize for memory footprint
-CFLAGS=-0 -s -d0 -ms -wx -os -DINTSIG_OFF=24
+# CFLAGS=-0 -s -d0 -ms -wx -os -DINTSIG_OFF=22
 
 # -0      generate code for 8086
 # -s      disable stack overflow checks
@@ -36,7 +36,7 @@ etherdfs.obj: genmsg etherdfs.c chint.h dosstruc.h globals.h version.h
 	wcc $CFLAGS etherdfs.c -fo=etherdfs.obj
 
 etherdfs.exe: genmsg etherdfs.obj chint.obj resident.obj
-	wlink system dos file chint.obj,resident.obj,etherdfs.obj option map=etherdfs name etherdfs order clname rdata clname code segment begtext segment _text clname far_data clname begdata
+	wlink system dos file chint.obj, resident.obj,etherdfs.obj option map=etherdfs name etherdfs order clname rdata clname code segment begtext segment _text clname far_data clname begdata
 	upx -9 --8086 etherdfs.exe
 
 # system dos    compile to a DOS real-mode application
