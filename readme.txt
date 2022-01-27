@@ -66,6 +66,14 @@ segment to be used as stack space when the progam go resident. The interrupt
 handler routine takes care of pointing the SS and SP registers to the top of
 this 'resident stack space' before processing the int 2F call.
 
+A change in the source code of the Open Watcom compiler of October 17, 2021 
+introduced another pitfall: the preamble of interrupt functions now calls 
+the function __GETDS to set the data segment. This function is part of the Open 
+Watcom library, and it resides in the transient part of the code that gets 
+trimmed when the program go resident. To solve this issue I added the code of
+__GETDS to the resident code segment, so that it can be called by the interrupt
+handler. The linker 
+
 *** Trimming the excess memory ***
 
 The DOS "go resident" call expects the amount of memory that needs to be kept in
