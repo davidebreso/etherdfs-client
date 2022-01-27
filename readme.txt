@@ -1,6 +1,6 @@
 
                 === Improving the EtherDFS DOS client === 
-                            Davide Bresolin
+                             Davide Bresolin
 
 EtherDFS is a client/server filesystem that allows a modern host (the server) to
 easily share files with an old PC running DOS. The original client TSR was
@@ -8,8 +8,8 @@ written by Mateusz Viste in 2017 and 2018. In 2020, Michael Ortmann added some
 patches to the code to fix a few bugs and reduce the memory footprint.
 
 The source code can be compiled with OpenWatcom v1.9 on a DOS machine, or a DOS
-emulator. To write the EhterDFS TSR in C, Mateusz Viste had to use a few tricks 
-to limit the memory footprint as much as possible, that are described in 
+emulator. To write the EhterDFS TSR in C, Mateusz Viste had to use a few tricks
+to limit the memory footprint as much as possible, that are described in
 memnotes.txt.
 
 This document describes the changes I made to the original source code for two
@@ -19,26 +19,24 @@ small.
 
 *** License ***
 
-  MIT License
-  Copyright (C) 2017, 2018 Mateusz Viste
-  Copyright (c) 2020 Michael Ortmann
-  Copyright (c) 2021 Davide Bresolin
+  MIT License 
+  Copyright (C) 2017, 2018 Mateusz Viste 
+  Copyright (c) 2020 Michael Ortmann 
+  Copyright (c) 2021, 2022 Davide Bresolin
 
 *** Websites ***
 
   https://github.com/davidebreso/etherdfs-client
-  https://gitlab.com/mortmann/etherdfs
-  http://etherdfs.sourceforge.net
-
+  https://gitlab.com/mortmann/etherdfs http://etherdfs.sourceforge.net
 
 *** Compile the code on a modern machine ***
 
 This was easy, and required only a few changes to the code:
 
-    - modify the Makefile to work on a unix environment 
-    - change path separators to unix forward slashes '/' 
-    - compile genmsg.c with Apple's clang, since Open Watcom cannot generate 
-      OSX executables
+ - modify the Makefile to work on a unix environment
+ - change path separators to unix forward slashes '/'
+ - compile genmsg.c with Apple's clang, since Open Watcom cannot generate OSX
+   executables
 
 *** Keeping the memory footprint small ***
 
@@ -61,18 +59,18 @@ memory map with the ORDER directive.
 
 Still, the stack remained at the top of the memory. Forcing the linker to place
 the stack before the code segments caused a lot of problems. I solved the
-problem by allocating 1024 bytes in the resident data
-segment to be used as stack space when the progam go resident. The interrupt
-handler routine takes care of pointing the SS and SP registers to the top of
-this 'resident stack space' before processing the int 2F call.
+problem by allocating 1024 bytes in the resident data segment to be used as
+stack space when the progam go resident. The interrupt handler routine takes
+care of pointing the SS and SP registers to the top of this 'resident stack
+space' before processing the int 2F call.
 
-A change in the source code of the Open Watcom compiler of October 17, 2021 
-introduced another pitfall: the preamble of interrupt functions now calls 
-the function __GETDS to set the data segment. This function is part of the Open 
-Watcom library, and it resides in the transient part of the code that gets 
+A change in the source code of the Open Watcom compiler of October 17, 2021
+introduced another pitfall: the preamble of interrupt functions now calls the
+function __GETDS to set the data segment. This function is part of the Open
+Watcom library, and it resides in the transient part of the code that gets
 trimmed when the program go resident. To solve this issue I added the code of
 __GETDS to the resident code segment, so that it can be called by the interrupt
-handler. The linker 
+handler. The linker
 
 *** Trimming the excess memory ***
 
@@ -80,13 +78,13 @@ The DOS "go resident" call expects the amount of memory that needs to be kept in
 16-bytes units (paragraphs). To know how many paragraphs the resident code and
 data really takes, I used two little tricks to figure it out at compile time.
 
-The linker places the various code and data segments of the program in the following
-order: 
+The linker places the various code and data segments of the program in the
+following order:
 
     RESDATA     (resident data and stack) 
     BEGTEXT     (resident code) 
-    _TEXT       (transient code)
-    ....        (transient data and other stuff)
+    _TEXT       (transient code) 
+    ....        (transient data and other stuff) 
     STACK       (transient stack)
 
 Only the RESDATA and BEGTEXT segments need to be kept when going resident,
@@ -106,14 +104,13 @@ memory.
 *** Loading high ***
 
 EtherDFS can be loaded high with the help of the LOADHIGH command of Dos 5+.
-However, LOADHIGH needs a continuous block of upper memory large enough for
-the whole program, not only for the resident portion. This requirement may
-prevent EtherDFS to be loaded high even if there is enough free upper memory for
-the resident part of the program. My version of EtherDFS uses a better
-solution: the program is loaded in conventional memory, it allocates only the
-required memory in the upper area, and moves the resident part there before going
-resident. Thanks to this technique it can be loaded high in cases where LOADHIGH
-fails.
+However, LOADHIGH needs a continuous block of upper memory large enough for the
+whole program, not only for the resident portion. This requirement may prevent
+EtherDFS to be loaded high even if there is enough free upper memory for the
+resident part of the program. My version of EtherDFS uses a better solution: the
+program is loaded in conventional memory, it allocates only the required memory
+in the upper area, and moves the resident part there before going resident.
+Thanks to this technique it can be loaded high in cases where LOADHIGH fails.
 
 The code for loading the TSR high is based on the 'Skeleton of TSR self-loading
 to upper memory' at http://vitsoft.info/tsrup.htm. Allocating a separate memory
