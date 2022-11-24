@@ -934,9 +934,6 @@ void __interrupt __far inthandler(union INTPACK r) {
     SKIPTSRSIG:
     /* save AX */
     push ax
-    /* set my custom DS (saved in CS:glob_newds) */
-    mov ax, cs:glob_newds
-    mov ds, ax
     /* save one word from the stack (might be used by SETATTR later)
      * The original stack should be at SS:BP+30 */
     mov ax, ss:[BP+30]

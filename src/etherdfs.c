@@ -24,23 +24,18 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
-
 #include <i86.h>     /* union INTPACK */
-// #include <stdio.h>   /* for printf */
+#include <stdio.h>   /* for printf */
 #include "version.h" /* program & protocol version */
-
 #include "dosstruc.h" /* definitions of structures used by DOS */
 #include "globals.h"  /* global variables used by etherdfs */
 #include "chint.h"    /* store_newds(newds) */
-
 /* this function obviously does nothing - but I need it because it is a
  * 'low-water' mark for the end of my resident code (so I know how much memory
  * exactly I can trim when going TSR) */
 static void begtextend(void) {
 }
-
 unsigned short residentcs;   /* segment of resident code */
-
 /* registers a packet driver handle to use on subsequent calls */
 static int pktdrv_accesstype(void) {
   unsigned char cflag = 0;
@@ -69,11 +64,9 @@ static int pktdrv_accesstype(void) {
     badluck:
     pop ds              /* restore DS */
   }
-
   if (cflag != 0) return(-1);
   return(0);
 }
-
 /* get my own MAC addr. target MUST point to a space of at least 6 chars */
 static void pktdrv_getaddr(unsigned char *dst) {
   _asm {
@@ -90,8 +83,6 @@ static void pktdrv_getaddr(unsigned char *dst) {
     call dword ptr glob_pktdrv_pktcall
   }
 }
-
-
 static int pktdrv_init(unsigned short pktintparam, int nocksum) {
   unsigned short far *intvect = (unsigned short far *)MK_FP(0, pktintparam << 2);
   unsigned short pktdrvfuncoffs = *intvect;
@@ -111,7 +102,6 @@ static int pktdrv_init(unsigned short pktintparam, int nocksum) {
   sig[5] = 'R';
   sig[6] = 'V';
   sig[7] = 'R';
-
   /* set my ethertype to 0xF5ED (EDF5 in network byte order) */
   glob_pktdrv_sndbuff[12] = 0xED;
   glob_pktdrv_sndbuff[13] = 0xF5;
@@ -121,12 +111,9 @@ static int pktdrv_init(unsigned short pktintparam, int nocksum) {
   } else {
     glob_pktdrv_sndbuff[56] = PROTOVER;       /* protocol version */
   }
-
   pktdrvfunc += 3; /* skip three bytes of executable code */
   for (i = 0; i < 8; i++) if (sig[i] != pktdrvfunc[i]) return(-1);
-
   glob_data.pktint = pktintparam;
-
   /* fetch the vector of the pktdrv interrupt and save it for later */
   _asm {
     mov ah, 35h /* AH=GetVect */
@@ -142,11 +129,8 @@ static int pktdrv_init(unsigned short pktintparam, int nocksum) {
   glob_pktdrv_pktcall = rseg;
   glob_pktdrv_pktcall <<= 16;
   glob_pktdrv_pktcall |= roff;
-
   return(pktdrv_accesstype());
 }
-
-
 static void pktdrv_free() {
   _asm {
     mov ah, 3
@@ -160,7 +144,6 @@ static void pktdrv_free() {
   /* if (regs.x.cflag != 0) return(-1);
   return(0);*/
 }
-
 static struct sdastruct far *getsda(void) {
   /* DOS 3.0+ - GET ADDRESS OF SDA (Swappable Data Area)
    * AX = 5D06h
@@ -183,7 +166,6 @@ static struct sdastruct far *getsda(void) {
   }
   return(MK_FP(rds, rsi));
 }
-
 /* returns the CDS struct for drive. requires DOS 4+ */
 static struct cdsstruct far *getcds(unsigned int drive) {
   /* static to preserve state: only do init once */
@@ -226,17 +208,6 @@ static struct cdsstruct far *getcds(unsigned int drive) {
   return((struct cdsstruct __far *)((unsigned char __far *)dir + (drive * 0x58 /*currdir_size*/)));
 }
 /******* end of CDS-related stuff *******/
-
-/* primitive message output used instead of printf() to limit memory usage
- * and binary size */
-static void outmsg(char *s);
-#pragma aux outmsg =                                                         \
-  "mov ah, 9h" /* DOS 1+ - WRITE STRING TO STANDARD OUTPUT                   \
-                * DS:DX -> '$'-terminated string                             \
-                * small memory model: no need to set DS, 's' is an offset */ \
-  "int 21h"                                                                  \
-parm [dx] modify exact [ah] nomemory;
-
 /* zero out an object of l bytes */
 static void zerobytes(void *obj, unsigned short l) {
   unsigned char *o = obj;
@@ -245,7 +216,6 @@ static void zerobytes(void *obj, unsigned short l) {
     o++;
   }
 }
-
 /* expects a hex string of exactly two chars "XX" and returns its value, or -1
  * if invalid */
 static int hexpair2int(char *hx) {
@@ -269,7 +239,6 @@ static int hexpair2int(char *hx) {
   i |= h[1];
   return(i);
 }
-
 /* translates an ASCII MAC address into a 6-bytes binary string */
 static int string2mac(unsigned char *d, char *mac) {
   int i, v;
@@ -287,14 +256,11 @@ static int string2mac(unsigned char *d, char *mac) {
   }
   return(0);
 }
-
-
 #define ARGFL_QUIET 1
 #define ARGFL_AUTO 2
 #define ARGFL_UNLOAD 4
 #define ARGFL_NOCKSUM 8
 #define ARGFL_LOADHIGH 16
-
 /* a structure used to pass and decode arguments between main() and parseargv() */
 struct argstruct {
   int argc;    /* original argc */
@@ -302,13 +268,10 @@ struct argstruct {
   unsigned short pktint; /* custom packet driver interrupt */
   unsigned char flags; /* ARGFL_QUIET, ARGFL_AUTO, ARGFL_UNLOAD, ARGFL_CKSUM, ARGFL_LOADHIGH */
 };
-
-
 /* parses (and applies) command-line arguments. returns 0 on success,
  * non-zero otherwise */
 static int parseargv(struct argstruct *args) {
   int i, drivemapflag = 0, gotmac = 0;
-
   /* iterate through arguments, if any */
   for (i = 1; i < args->argc; i++) {
     char opt;
@@ -377,36 +340,15 @@ static int parseargv(struct argstruct *args) {
     }
     gotmac = 1;
   }
-
   /* fail if MAC+unload or mapping+unload */
   if (args->flags & ARGFL_UNLOAD) {
     if ((gotmac != 0) || (drivemapflag != 0)) return(-1);
     return(0);
   }
-
   /* did I get at least one drive mapping? and a MAC? */
   if ((drivemapflag == 0) || (gotmac == 0)) return(-6);
-
   return(0);
 }
-
-/* translates an unsigned byte into a 2-characters string containing its hex
- * representation. s needs to be at least 3 bytes long. */
-static void byte2hex(char *s, unsigned char b) {
-  char h[16];
-  unsigned short i;
-  /* pre-compute h[] with a string 0..F -- I could do the same thing easily
-   * with h[] = "0123456789ABCDEF", but then this would land inside the DATA
-   * segment, while I want to keep it in stack to avoid polluting the TSR's
-   * memory space */
-  for (i = 0; i < 10; i++) h[i] = '0' + i;
-  for (; i < 16; i++) h[i] = ('A' - 10) + i;
-  /* */
-  s[0] = h[b >> 4];
-  s[1] = h[b & 15];
-  s[2] = 0;
-}
-
 /* allocates sz paragraphs in upper memory and returns the segment to allocated memory 
  * or 0 on error. */
 __declspec(naked) static unsigned short allocseg(unsigned short sz) {
@@ -447,7 +389,6 @@ __declspec(naked) static unsigned short allocseg(unsigned short sz) {
   }
 }
 #pragma aux allocseg parm [dx] value [dx] modify exact [ax bx cl dx] nomemory;
-
 /* free segment previously allocated through allocseg() */
 static void freeseg(unsigned short segm) {
   _asm {
@@ -456,7 +397,6 @@ static void freeseg(unsigned short segm) {
     int 21h
   }
 }
-
 /* scans the 2Fh interrupt for some available 'multiplex id' in the range
  * C0..FF. also checks for EtherDFS presence at the same time. returns:
  *  - the available id if found
@@ -498,7 +438,6 @@ static unsigned char findfreemultiplex(unsigned char *presentflag) {
   *presentflag = pflag;
   return(freeid);
 }
-
 /* Compute the size of resident memory needed by the program, in 16 btyes
  * paragraphs. How to compute the number of paragraphs? Simple: look at 
  * the memory map and note down the size of the RESDATA segment (that's 
@@ -525,7 +464,6 @@ static unsigned short get_residentsize() {
   }
   return(res);
 }
-
 /* Compute the segment of the upper memory code */
 static unsigned short get_upperds(unsigned short upperseg) {
   unsigned short res = 0;
@@ -541,9 +479,7 @@ static unsigned short get_upperds(unsigned short upperseg) {
   }
   return(res);
 }
-
 static unsigned char umb_ident[8] = "ETHERDFS";
-
 int main(int argc, char **argv) {
   struct argstruct args;
   struct cdsstruct far *cds;
@@ -557,16 +493,34 @@ int main(int argc, char **argv) {
   
   /* set all drive mappings as 'unused' */
   for (i = 0; i < 26; i++) glob_data.ldrv[i] = 0xff;
-
   /* parse command-line arguments */
   zerobytes(&args, sizeof(args));
   args.argc = argc;
   args.argv = argv;
   if (parseargv(&args) != 0) {
-    #include "msg/help.c"
+    printf("EtherDFS v" PVER "\n"
+           "  Copyright (C) " PDATE " Mateusz Viste\n"
+           "  Copyright (C) " MODATE " Michael Ortmann\n"
+           "  Copyright (C) " DBDATE " Davide Bresolin\n"
+           "A network drive for DOS, running over raw ethernet\n"
+           "\n"
+           "Usage: etherdfs SRVMAC rdrv-ldrv [rdrv2-ldrv2 ...] [options]\n"
+           "       etherdfs /u\n"
+           "\n"
+           "Options:\n"
+           "  /p=XX   use packet driver at interrupt XX (autodetect otherwise)\n"
+           "  /n      disable EtherDFS checksums\n"
+           "  /q      quiet mode (print nothing if loaded/unloaded successfully)\n"
+           "  /h      install EtherDFS in upper memory\n"
+           "  /u      unload EtherDFS from memory\n"
+           "\n"
+           "Use '::' as SRVMAC for server auto-discovery.\n"
+           "\n"
+           "Examples:  etherdfs 6d:4f:4a:4d:49:52 C-F /q\n"
+           "           etherdfs :: C-X D-Y E-Z /p=6F\n"
+    );
     return(1);
   }
-
   /* check DOS version - I require DOS 5.0+ */
   _asm {
     mov ax, 3306h
@@ -578,10 +532,9 @@ int main(int argc, char **argv) {
     done:
   }
   if (tmpflag < 5) { /* tmpflag contains DOS version or 0 for 'unknown' */
-    #include "msg/unsupdos.c"
+    printf("Unsupported DOS version! EtherDFS requires MS-DOS 5+.\n");
     return(1);
   }
-
   /* look whether or not it's ok to install a network redirector at int 2F */
   _asm {
     mov tmpflag, 0
@@ -593,10 +546,9 @@ int main(int argc, char **argv) {
     goodtogo:
   }
   if (tmpflag != 0) {
-    #include "msg/noredir.c"
+    printf("Redirector installation has been forbidden either by DOS or another process.\n");
     return(1);
   }
-
   /* is it all about unloading myself? */
   if ((args.flags & ARGFL_UNLOAD) != 0) {
     unsigned char etherdfsid, pktint;
@@ -604,11 +556,10 @@ int main(int argc, char **argv) {
     unsigned long pktdrvcall;
     struct tsrshareddata far *tsrdata;
     unsigned char far *int2fptr;
-
     /* am I loaded at all? */
     etherdfsid = findfreemultiplex(&tmpflag);
     if (tmpflag == 0) { /* not loaded, cannot unload */
-      #include "msg/notload.c"
+      printf("EtherDFS is not loaded, so it cannot be unloaded.\n");
       return(1);
     }
     /* am I still at the top of the int 2Fh chain? */
@@ -640,9 +591,8 @@ int main(int argc, char **argv) {
     buff[6] = '$';
     outmsg(buff);
     */
-
     if ((int2fptr[0] != 'M') || (int2fptr[1] != 'V') || (int2fptr[2] != 'e') || (int2fptr[3] != 't')) {
-      #include "msg/othertsr.c";
+      printf("EtherDFS cannot be unloaded because another TSR hooked its interrupt handler.\n");
       return(1);
     }
     /* get the ptr to TSR's data */
@@ -663,7 +613,7 @@ int main(int argc, char **argv) {
       pop bx
     }
     if (myseg == 0xffffu) {
-      #include "msg/tsrcomfa.c"
+      printf("Communication with the TSR failed.\n");
       return(1);
     }
     // printf("TSR shared data at %04X:%04X\n", myseg, myoff);
@@ -732,11 +682,10 @@ int main(int argc, char **argv) {
     freeseg(tsrdata->pspseg);
     /* all done */
     if ((args.flags & ARGFL_QUIET) == 0) {
-      #include "msg/unloaded.c"
+      printf("EtherDFS unloaded successfully.\n");
     }
     return(0);
   }
-
   /* remember current int 2f handler, we might over-write it soon (also I
    * use it to see if I'm already loaded) */
   _asm {
@@ -749,42 +698,40 @@ int main(int argc, char **argv) {
     pop bx
     pop es
   }
-
   /* is the TSR installed already? */
   glob_multiplexid = findfreemultiplex(&tmpflag);
   if (tmpflag != 0) { /* already loaded */
-    #include "msg/alrload.c"
+    printf("EtherDFS is already installed and cannot be loaded twice.\n");
     return(1);
   } else if (glob_multiplexid == 0) { /* no free multiplex id found */
-    #include "msg/nomultpx.c"
+    printf("Failed to find an available INT 2F multiplex id.\n"
+           "You may have loaded too many TSRs already.\n");
     return(1);
   }
-
   /* if any of the to-be-mapped drives is already active, fail */
   for (i = 0; i < 26; i++) {
     if (glob_data.ldrv[i] == 0xff) continue;
     cds = getcds(i);
     if (cds == NULL) {
-      #include "msg/mapfail.c"
+      printf("Unable to activate the local drive mapping. You are either using an\n"
+             "unsupported operating system, or your LASTDRIVE directive does not permit\n"
+             "to define the requested drive letter (try LASTDRIVE=Z in your CONFIG.SYS).\n");
       return(1);
     }
     if (cds->flags != 0) {
-      #include "msg/drvactiv.c"
+      printf("The requested local drive letter is already in use. Please choose another\n"
+             "drive letter.\n");
       return(1);
     }
   }
-
   /* remember the SDA address (will be useful later) */
   glob_sdaptr = getsda();
-
   /* Save resident data segment inside resident code segment. */
   glob_newds = (FP_SEG((void far *)&glob_data));
   // printf("Saved resident data segment at %04X\n", glob_newds);
-
   /* Save resident code segment. */
   residentcs = (FP_SEG((void far *)&inthandler));
   // printf("Saved resident code segment at %04X\n", residentcs);
-
   /* init the packet driver interface */
   glob_data.pktint = 0;
   if (args.pktint == 0) { /* detect first packet driver within int 60h..80h */
@@ -796,11 +743,10 @@ int main(int argc, char **argv) {
   }
   /* has it succeeded? */
   if (glob_data.pktint == 0) {
-    #include "msg/pktdfail.c"
+    printf("Packet driver initialization failed.\n");
     return(1);
   }
   pktdrv_getaddr(GLOB_LMAC);
-
   /* should I auto-discover the server? */
   if ((args.flags & ARGFL_AUTO) != 0) {
     unsigned short *ax;
@@ -810,12 +756,11 @@ int main(int argc, char **argv) {
     for (i = 0; glob_data.ldrv[i] == 0xff; i++); /* find first mapped disk */
     /* send a discovery frame that will update glob_rmac */
     if (sendquery(AL_DISKSPACE, i, 0, &answer, &ax, 1) != 6) {
-      #include "msg/nosrvfnd.c"
+      printf("No EtherSRV server found on the LAN (not for requested drive at least).\n");
       pktdrv_free(); /* free the pkt drv and quit */
       return(1);
     }
   }
-
   /* set all drives as being 'network' drives (also add the PHYSICAL bit,
    * otherwise MS-DOS 6.0 will ignore the drive) */
   for (i = 0; i < 26; i++) {
@@ -828,7 +773,6 @@ int main(int argc, char **argv) {
     cds->current_path[2] = '\\';
     cds->current_path[3] = 0;
   }
-
   /* get the segment of the PSP (might come handy later) */
   _asm {
     mov ah, 62h          /* get current PSP address */
@@ -838,14 +782,13 @@ int main(int argc, char **argv) {
   // printf("PSP segment at %04X\n", glob_data.pspseg);
   // printf("RESDATA segment at %04X\n", FP_SEG((void far *)&glob_data));
   // printf("BEGTEXT segment at %04X\n", FP_SEG((void far *)inthandler));
-
   /* do I have to load myself high? */
   if ((args.flags & ARGFL_LOADHIGH) != 0) {
     /* allocate a new segment in the upper memory area to use for resident code and data */
     upperseg = allocseg(residentsize);
     if (upperseg == 0) {
       /* Upper memory allocation error, load in conventional memory */
-      #include "msg/memfail.c"
+      printf("Upper memory alloc error, loading TSR in conventional memory.\n");
       args.flags &= ~ARGFL_LOADHIGH;
     } else {
       // printf("Upper segment at %04X\n", upperseg);
@@ -856,7 +799,6 @@ int main(int argc, char **argv) {
       /* Get upper resident code segment */
       residentcs = get_upperds(upperseg);
       // printf("Upper resident code segment at %04X\n", residentcs);
-
       /* Set name of the block owner in the MCB
        * The Memory Control Block is 1 paragraph below upperseg
        * At offset 8 in MCB should be the name of block owner. */
@@ -915,58 +857,27 @@ int main(int argc, char **argv) {
         }
         /* Release upper memory block */
         freeseg(upperseg);
-        #include "msg/relfail.c"
+        printf("Relocation to upper memory failed.\n");
         return(1);
       }
     }
   }
-
   if ((args.flags & ARGFL_QUIET) == 0) {
-    #include "msg/instlled.c"
-    for (i = 0; i < 6; i++) {
-      byte2hex(buff + i + i + i, GLOB_LMAC[i]);
+    printf("EtherDFS v" PVER " installed (local MAC %02x", GLOB_LMAC[0]);
+    for (i = 1; i < 6; i++) {
+      printf(":%02x", GLOB_LMAC[i]);
     }
-    for (i = 2; i < 16; i += 3) buff[i] = ':';
-    buff[17] = '$';
-    outmsg(buff);
-    #include "msg/pktdrvat.c"
-    byte2hex(buff, glob_data.pktint);
-    buff[2] = ')';
-    buff[3] = '\r';
-    buff[4] = '\n';
-    buff[5] = '$';
-    outmsg(buff);
+    printf(", pktdrvr at INT %02x)\n", glob_data.pktint);
     for (i = 0; i < 26; i++) {
       int z;
       if (glob_data.ldrv[i] == 0xff) continue;
-      buff[0] = ' ';
-      buff[1] = 'A' + i;
-      buff[2] = ':';
-      buff[3] = ' ';
-      buff[4] = '-';
-      buff[5] = '>';
-      buff[6] = ' ';
-      buff[7] = '[';
-      buff[8] = 'A' + glob_data.ldrv[i];
-      buff[9] = ':';
-      buff[10] = ']';
-      buff[11] = ' ';
-      buff[12] = 'o';
-      buff[13] = 'n';
-      buff[14] = ' ';
-      buff[15] = '$';
-      outmsg(buff);
-      for (z = 0; z < 6; z++) {
-        byte2hex(buff + z + z + z, GLOB_RMAC[z]);
+      printf(" %c: -> [%c:] on ", 'A' + i, 'A' + glob_data.ldrv[i]);
+      for (z = 0; z < 5; z++) {
+        printf("%02x:", GLOB_RMAC[z]);
       }
-      for (z = 2; z < 16; z += 3) buff[z] = ':';
-      buff[17] = '\r';
-      buff[18] = '\n';
-      buff[19] = '$';
-      outmsg(buff);
+      printf("%02x\n", GLOB_RMAC[5]);
     }
   }
-
   /* free the environment (env segment is at offset 2C of the PSP) */
   // printf("Free the environment.\n");
   _asm {
@@ -975,7 +886,6 @@ int main(int argc, char **argv) {
     mov ah, 49h         /* free memory (DOS 2+) */
     int 21h
   }
-
   /* set up the TSR (INT 2F catching) */
   // printf("Set up the TSR at %04X:%04X\n", residentcs, inthandler);
   _asm {
@@ -989,7 +899,6 @@ int main(int argc, char **argv) {
     pop ds /* restore DS to previous value */
     sti
   }
-
   // printf("Turn self into a TSR keeping %d paragraphs of memory\n", residentsize);
   /* If the TSR is loaded high, set the PSP to upper memory and deallocate low memory */
   if ((args.flags & ARGFL_LOADHIGH) != 0) {
@@ -1020,6 +929,5 @@ int main(int argc, char **argv) {
     mov dx, residentsize /* DX = size of resident memory (in paragraphs) */
     int 21h
   }
-
   return(0); /* never reached, but compiler complains if not present */
 }

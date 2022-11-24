@@ -10,7 +10,7 @@ BEGTEXT   segment
 ; Global variable to store resident data segment inside resident code segment. 
 ; Used by inthandler and pktdrv_recv to restore the correct DS value. 
 glob_newds       label word
-        dw      0h
+        dw      DGROUP
         public  "C",glob_newds       
 
 
@@ -82,7 +82,7 @@ _mvchain_intr     endp
 public  __GETDS
 __GETDS proc    near
         push    ax                      ; save ax
-        mov     ax,DGROUP               ; get DGROUP
+        mov     ax, cs:glob_newds       ; get my custom DS (saved in CS:glob_newds)
         mov     ds,ax                   ; load DS with appropriate value
         pop     ax                      ; restore ax
         ret                             ; return

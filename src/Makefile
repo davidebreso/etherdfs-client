@@ -22,20 +22,16 @@ CFLAGS=-0 -s -d0 -ms -wx -ot -DINTSIG_OFF=24
 
 all: etherdfs.exe
 
-genmsg: genmsg.c version.h
-	gcc -o genmsg genmsg.c
-
 chint.obj: chint086.asm
 	wasm -0 chint086.asm -fo=chint.obj -ms
 	
 resident.obj: resident.c chint.h dosstruc.h globals.h
 	wcc $CFLAGS resident.c -fo=resident.obj
 	
-etherdfs.obj: genmsg etherdfs.c chint.h dosstruc.h globals.h version.h
-	./genmsg
+etherdfs.obj: etherdfs.c chint.h dosstruc.h globals.h version.h
 	wcc $CFLAGS etherdfs.c -fo=etherdfs.obj
 
-etherdfs.exe: genmsg etherdfs.obj chint.obj resident.obj
+etherdfs.exe: etherdfs.obj chint.obj resident.obj
 	wlink system dos file chint.obj, resident.obj,etherdfs.obj option map=etherdfs name etherdfs order clname rdata clname code segment begtext segment _text clname far_data clname begdata
 	upx -9 --8086 etherdfs.exe
 
@@ -47,16 +43,15 @@ etherdfs.exe: genmsg etherdfs.obj chint.obj resident.obj
 clean: .symbolic
 	rm -f etherdfs.exe
 	rm -f etherdfs.map
-	rm -f genmsg
-	rm -rf ./msg
 	rm *.obj
 	rm *.err
 
 pkg: .symbolic etherdfs.exe
 	rm -f etherdfs.zip
-	zip -9 -k etherdfs.zip etherdfs.exe etherdfs.txt history.txt
-	rm -f ethersrc.zip del ethersrc.zip
-	zip -9 -k ethersrc.zip *.h *.c *.asm *.txt Makefile
+	zip -9 -j -l etherdfs.zip ../etherdfs.txt ../history.txt
+	zip -9 -j etherdfs.zip etherdfs.exe 
+	rm -f ethersrc.zip
+	zip -9 -j ethersrc.zip *.h *.c *.asm ../*.txt Makefile
 
 release: .symbolic etherdfs.exe
 	cp etherdfs.exe ../bin
