@@ -7,7 +7,7 @@
 #
 
 # Compiler settings to optimize for execution time
-CFLAGS=-0 -s -d0 -ms -wx -ot -DINTSIG_OFF=24
+CFLAGS=-0 -s -d0 -ms -wx -ot -DINTSIG_OFF=26
 
 # Compiler settings to optimize for memory footprint
 # CFLAGS=-0 -s -d0 -ms -wx -os -DINTSIG_OFF=22

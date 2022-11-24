@@ -488,7 +488,6 @@ int main(int argc, char **argv) {
   unsigned short upperseg;     /* segment of upper memory block to load high */
   unsigned short residentsize = get_residentsize();
   unsigned short old_pspseg;    /* PSP of low memory portion of the program */
-  char buff[20];
   unsigned char far *mcbfptr;
   
   /* set all drive mappings as 'unused' */

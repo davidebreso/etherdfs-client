@@ -4,7 +4,6 @@
 BEGTEXT   segment word public 'CODE'
 BEGTEXT   ends
 
-
 BEGTEXT   segment
 
 ; Global variable to store resident data segment inside resident code segment. 
@@ -72,22 +71,6 @@ _mvchain_intr     proc far
         pop     dx                      ; . . .
         ret                             ; return to previous interrupt handler
 _mvchain_intr     endp
-
-;
-;       This is a copy of the __GETDS function from the Open Watcom v2
-;       source code. From the October 2021 version this function is called
-;       in the preamble of interrupt routines, so it should be included in
-;       the resident portion of the code.
-;
-public  __GETDS
-__GETDS proc    near
-        push    ax                      ; save ax
-        mov     ax, cs:glob_newds       ; get my custom DS (saved in CS:glob_newds)
-        mov     ds,ax                   ; load DS with appropriate value
-        pop     ax                      ; restore ax
-        ret                             ; return
-__GETDS endp
-
 
 BEGTEXT ends
         end
