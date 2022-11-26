@@ -48,31 +48,29 @@ static unsigned char dbg_hexc[16] = "0123456789ABCDEF";
 
 /* all the calls I support are in the range AL=0..2Eh - the list below serves
  * as a convenience to compare AL (subfunction) values */
-enum AL_SUBFUNCTIONS {
-  AL_INSTALLCHK = 0x00,
-  AL_RMDIR      = 0x01,
-  AL_MKDIR      = 0x03,
-  AL_CHDIR      = 0x05,
-  AL_CLSFIL     = 0x06,
-  AL_CMMTFIL    = 0x07,
-  AL_READFIL    = 0x08,
-  AL_WRITEFIL   = 0x09,
-  AL_LOCKFIL    = 0x0A,
-  AL_UNLOCKFIL  = 0x0B,
-  AL_DISKSPACE  = 0x0C,
-  AL_SETATTR    = 0x0E,
-  AL_GETATTR    = 0x0F,
-  AL_RENAME     = 0x11,
-  AL_DELETE     = 0x13,
-  AL_OPEN       = 0x16,
-  AL_CREATE     = 0x17,
-  AL_FINDFIRST  = 0x1B,
-  AL_FINDNEXT   = 0x1C,
-  AL_SKFMEND    = 0x21,
-  AL_UNKNOWN_2D = 0x2D,
-  AL_SPOPNFIL   = 0x2E,
-  AL_UNKNOWN    = 0xFF
-};
+#define AL_INSTALLCHK 0x00
+#define AL_RMDIR      0x01
+#define AL_MKDIR      0x03
+#define AL_CHDIR      0x05
+#define AL_CLSFIL     0x06
+#define AL_CMMTFIL    0x07
+#define AL_READFIL    0x08
+#define AL_WRITEFIL   0x09
+#define AL_LOCKFIL    0x0A
+#define AL_UNLOCKFIL  0x0B
+#define AL_DISKSPACE  0x0C
+#define AL_SETATTR    0x0E
+#define AL_GETATTR    0x0F
+#define AL_RENAME     0x11
+#define AL_DELETE     0x13
+#define AL_OPEN       0x16
+#define AL_CREATE     0x17
+#define AL_FINDFIRST  0x1B
+#define AL_FINDNEXT   0x1C
+#define AL_SKFMEND    0x21
+#define AL_UNKNOWN_2D 0x2D
+#define AL_SPOPNFIL   0x2E
+#define AL_UNKNOWN    0xFF
 
 /* whenever the tsrshareddata structure changes, offsets below MUST be
  * adjusted (these are required by assembly routines) */

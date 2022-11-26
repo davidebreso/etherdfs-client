@@ -15,7 +15,7 @@ src/chint.h	f	2022-11-26T16:37:27Z
 src/chint086.asm	f	2022-11-26T16:26:41Z
 src/dosstruc.h	f	2022-01-26T21:00:50Z
 src/etherdfs.c	f	2022-11-26T17:07:29Z
-src/globals.h	f	2022-11-26T16:38:03Z
-src/resident.c	f	2022-11-26T17:13:32Z
+src/globals.h	f	2022-11-26T18:04:40Z
+src/resident.c	f	2022-11-26T19:03:49Z
 src/version.h	f	2022-11-24T12:23:59Z
 todo.txt	f	2022-01-26T22:02:09Z

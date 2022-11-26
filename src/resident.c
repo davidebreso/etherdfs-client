@@ -210,7 +210,7 @@ void __declspec(naked) far pktdrv_recv(void) {
 
 /* this table makes it easy to figure out if I want a subfunction or not */
 unsigned char supportedfunctions[0x2F] = {
-  AL_INSTALLCHK,  /* 0x00 */
+  AL_UNKNOWN,     /* 0x00 */
   AL_RMDIR,       /* 0x01 */
   AL_UNKNOWN,     /* 0x02 */
   AL_MKDIR,       /* 0x03 */
@@ -940,7 +940,7 @@ void __declspec(naked) __far inthandler() {
     mov ds, ax
     /* save one word from the stack (might be used by SETATTR later)
      * The original stack should be at SS:BP+30 */
-    mov ax, ss:[BP+30]
+    mov ax, ss:[BP+6]
     mov glob_reqstkword, ax
 
     /* uncomment the debug code below to insert a stack's dump into snd eth
@@ -975,7 +975,7 @@ void __declspec(naked) __far inthandler() {
     pop ax
     /* is it a multiplex call for me? */
     cmp ah, glob_multiplexid
-    jne chain_int2f             /* if not, call next handler in the chain */
+    jne not_for_me              /* if not, check for redirector */
     cmp al, 1                   /* 0 = install check, 1 = get shared data ptr */
     jnb check_al_1
     /* here AL = 0  */
@@ -992,6 +992,29 @@ void __declspec(naked) __far inthandler() {
     mov cx, offset glob_data    
     pop ds                      /* restore DS   */
     iret
+
+    /* if not related to a redirector function (AH=11h), or the function is
+     * an 'install check' (0), or the function is over our scope (2Eh), or it's
+     * an otherwise unsupported function (as pointed out by supportedfunctions),
+     * then call the previous INT 2F handler immediately */
+  not_for_me:
+    cmp ah, 0x11
+    jne chain_int2f     /* not a redirector function, call next handler in the chain */    
+    cmp al, 0x2E        /* is function in our scope (2Eh) ? */
+    ja chain_int2f      /* out of scope, call next handler in the chain */
+    push bx             /* save BX and AX */
+    push ax             
+    mov bx, offset supportedfunctions
+    xlat                  /* now AL contains supportedfunctions[AL] */
+    cmp al, AL_UNKNOWN    /* is it supported ? */
+    je restore_and_chain  /* not supported, call next handler in the chain */
+    /* Function supported, print a debug symbol and call next handler in the chain */
+    add al, '0'         /* make AL a printable char */
+    int 0x29            /* print a char with DOS */
+    
+  restore_and_chain:
+    pop ax              /* restore AX and BX */
+    pop bx
   chain_int2f:
   /* hand control to the previous INT 2F handler */
     pop ds                      /* restore DS   */
