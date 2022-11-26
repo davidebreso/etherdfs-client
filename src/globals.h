@@ -79,6 +79,7 @@ static unsigned char dbg_hexc[16] = "0123456789ABCDEF";
 #define GLOB_DATOFF_PSPSEG 4
 #define GLOB_DATOFF_PKTHANDLE 6
 #define GLOB_DATOFF_PKTINT 8
+#define GLOB_DATOFF_LDRV 9
 
 struct tsrshareddata {
 /*offs*/
@@ -89,7 +90,7 @@ struct tsrshareddata {
 /*  6 */ unsigned short pkthandle; /* handler returned by the packet driver */
 /*  8 */ unsigned char pktint;     /* software interrupt of the packet driver */
 
-         unsigned char ldrv[26]; /* local to remote drives mappings (0=A:, 1=B, etc */
+/*  9 */ unsigned char ldrv[26]; /* local to remote drives mappings (0=A:, 1=B, etc */
 };
 
 extern struct tsrshareddata glob_data;

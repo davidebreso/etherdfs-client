@@ -73,7 +73,11 @@ struct foundfilestruct {
  * File access/sharing mode    24Eh    23Bh
  * Ptr to current CDS          282h    26Ch
  * Extended open mode          2E1h    Not supported
- *
+ */
+#define SDA_DATOFF_FN1  0x9E 
+#define SDA_DATOFF_SDB  0x19E
+ 
+/*
  * The struct below is matching FreeDOS and MS-DOS 4+
  */
 struct sdastruct {
@@ -144,5 +148,7 @@ struct sftstruct {
   unsigned char dir_entry_no;
   char file_name[11];
 };
+
+#define SFT_DATOFF_INFO 5
 
 #endif

@@ -13,9 +13,9 @@ readme.txt	f	2022-01-27T16:25:20Z
 src/Makefile	f	2022-11-26T17:14:05Z
 src/chint.h	f	2022-11-26T16:37:27Z
 src/chint086.asm	f	2022-11-26T16:26:41Z
-src/dosstruc.h	f	2022-01-26T21:00:50Z
+src/dosstruc.h	f	2022-11-26T19:48:00Z
 src/etherdfs.c	f	2022-11-26T17:07:29Z
-src/globals.h	f	2022-11-26T18:04:40Z
-src/resident.c	f	2022-11-26T19:03:49Z
+src/globals.h	f	2022-11-26T19:58:30Z
+src/resident.c	f	2022-11-26T20:21:32Z
 src/version.h	f	2022-11-24T12:23:59Z
 todo.txt	f	2022-01-26T22:02:09Z

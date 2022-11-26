@@ -924,6 +924,81 @@ void process2f(void) {
 /**** Allocate space for the Interrupt handler stack */
 static unsigned char newstack[NEWSTACKSZ];
 
+/*
+ * This routine is part of the INT handler
+ * It determines whether or not the query is meant for a drive I control
+ * and if not - set carry flag */
+void __declspec(naked) validate_drive(void) {
+  _asm {
+    /* Save registers */
+    push es
+    push di
+    push bx
+    /* determine whether or not the query is meant for a drive I control */
+    cmp al, AL_CHDIR      /* AL_RMDIR <= AL <= AL_CHDIR ? */
+    jna drive_from_sda    /* yes: get drive from sda.fn1 */
+    cmp al, AL_UNLOCKFIL  /* AL_CSFIL <= AL <= AL_UNLOCKFIL ? */
+    jna drive_from_sft    /* yes: get drive from SFT */
+    cmp al, AL_DISKSPACE  /* AL = AL_DISKSPACE ? */
+    jna drive_from_cds    /* yes: get drive from CDS */
+    cmp al, AL_CREATE     /* AL_SETATTR <= AL <= AL_CREATE ? */
+    jna drive_from_sda    /* yes: get drive from sda.fn1 */
+    cmp al, AL_FINDFIRST  /* AL = AL_FINDFIRST ? */
+    jna drive_from_cds    /* yes: get drive from CDS */
+    cmp al, AL_FINDNEXT   /* AL = AL_FINDNEXT ? */
+    jna drive_from_sdb    /* yes: get drive from SDB */
+    cmp al, AL_UNKNOWN_2D /* AL_SKFMEND <= AL <= AL_UNKNOWN_2D ? */
+    jna drive_from_sft    /* yes: get drive from SFT */
+    /* If I am here, then AL = AL_SPOPNFIL, get drive from sda.fn1 */
+  drive_from_sda:         /* check glob_sdaptr->fn1[0] for drive */
+    les di, glob_sdaptr   /* ES:DI points to global SDA */
+    mov al, es:[di + SDA_DATOFF_FN1]  /* AL is first char of glob_sdaptr->fn1 */
+    and al, 0x1F          /* Convert drive letter to number ... */
+    dec al                /* ... zero based (A = 0, B = 1, ...) */
+    jmp check_drive
+  drive_from_sft:         /* get drive from SFT */
+    /* ES:DI points to the SFT: if the bottom 6 bits of the device information
+     * word in the SFT are > last drive, then it relates to files not associated
+     * with drives, such as LAN Manager named pipes. */
+    mov al, es:[di + SFT_DATOFF_INFO] /* AL low byte of info word */
+    and al, 0x1F          /* drive number is bottom 6 bits */
+    jmp check_drive
+  drive_from_cds:         /* get drive from CDS (at ES:DI) */
+    mov al, es:di         /* AL is first char of cds->current_path */
+    and al, 0x1F          /* Convert drive letter to number ... */
+    dec al                /* ... zero based (A = 0, B = 1, ...) */
+    jmp check_drive
+  drive_from_sdb:         /* get drive from SDB */
+    les di, glob_sdaptr   /* ES:DI points to global SDA */
+    mov al, es:[di + SDA_DATOFF_SDB]  /* AL is glob_sdaptr->sdb.drv_lett */
+    and al, 0x1F          /* Keep only bottom 6 bits */
+  check_drive:     
+    /* Print lowercase drive letter */
+    push ax             /* Save AX */
+    add al, 'a'         /* make AL lowercase drive letter */
+    int 0x29            /* print a char with DOS */
+    pop ax              /* restore AX */
+    /* validate drive */
+    cmp al, 25          /* requested drive > Z ? */
+    ja invalid_drive    /* yes, set carry flag and return */
+    mov bx, offset glob_data + GLOB_DATOFF_LDRV
+    xlat                /* now AL contains glob_data.ldrv[AL] */
+    cmp al, 0xFF        /* is drive under my control ? */
+    je invalid_drive    /* no, jump to next handler in the chain */
+    clc                 /* clear carry flag */
+    jmp ret_ok
+  invalid_drive: 
+    stc                 
+    /* return 'invalid drive' */
+  ret_ok:
+    /* Restore registers */
+    pop bx
+    pop di
+    pop es
+    ret
+  };
+}
+
 /* this function is hooked on INT 2Fh */
 void __declspec(naked) __far inthandler() {
   /* insert a static code signature so I can reliably patch myself later,
@@ -940,8 +1015,8 @@ void __declspec(naked) __far inthandler() {
     mov ds, ax
     /* save one word from the stack (might be used by SETATTR later)
      * The original stack should be at SS:BP+30 */
-    mov ax, ss:[BP+6]
-    mov glob_reqstkword, ax
+//    mov ax, ss:[BP+6]
+//    mov glob_reqstkword, ax
 
     /* uncomment the debug code below to insert a stack's dump into snd eth
      * frame - debugging ONLY! */
@@ -1008,9 +1083,25 @@ void __declspec(naked) __far inthandler() {
     xlat                  /* now AL contains supportedfunctions[AL] */
     cmp al, AL_UNKNOWN    /* is it supported ? */
     je restore_and_chain  /* not supported, call next handler in the chain */
-    /* Function supported, print a debug symbol and call next handler in the chain */
+    /* Function supported, print a debug symbol */
+    push ax             /* Save AX */
     add al, '0'         /* make AL a printable char */
     int 0x29            /* print a char with DOS */
+    pop ax              /* restore AX */
+    
+    /* validate drive */
+    call validate_drive
+    push ax             /* Save AX */
+    jc print_err
+    mov glob_reqdrv, al /* save requested drive for later use */
+    mov al, '!'
+    jmp print_mark
+  print_err:
+    mov al, '?'
+  print_mark:
+    /* Print mark */
+    int 0x29            /* print a char with DOS */
+    pop ax              /* restore AX */
     
   restore_and_chain:
     pop ax              /* restore AX and BX */
