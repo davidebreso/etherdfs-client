@@ -12,6 +12,9 @@ CFLAGS=-0 -s -d0 -ms -wx -ot -DINTSIG_OFF=26
 # Compiler settings to optimize for memory footprint
 # CFLAGS=-0 -s -d0 -ms -wx -os -DINTSIG_OFF=22
 
+# Uncomment this to build an unpacked executable
+!define NO_PACK
+
 # -0      generate code for 8086
 # -s      disable stack overflow checks
 # -d0     don't include debugging information
@@ -32,8 +35,12 @@ etherdfs.obj: etherdfs.c chint.h dosstruc.h globals.h version.h
 	wcc $CFLAGS etherdfs.c -fo=etherdfs.obj
 
 etherdfs.exe: etherdfs.obj chint.obj resident.obj
-	wlink system dos file chint.obj, resident.obj,etherdfs.obj option map=etherdfs name etherdfs order clname rdata clname code segment begtext segment _text clname far_data clname begdata
+	wlink system dos file chint.obj, resident.obj,etherdfs.obj option map=etherdfs &
+		name etherdfs order clname rdata clname code segment begtext segment _text &
+		clname far_data clname begdata
+!ifndef NO_PACK
 	upx -9 --8086 etherdfs.exe
+!endif
 
 # system dos    compile to a DOS real-mode application
 # option map=   generate a map file
@@ -55,3 +62,7 @@ pkg: .symbolic etherdfs.exe
 
 release: .symbolic etherdfs.exe
 	cp etherdfs.exe ../bin
+	
+push: .symbolic etherdfs.exe
+	cp etherdfs.exe ~/Sites
+
