@@ -12,6 +12,11 @@ glob_newds       label word
         dw      DGROUP
         public  "C",glob_newds       
 
+prev_2f_handler label dword
+        dd      0
+        public  "C",prev_2f_handler       
+
+
 
 ; this is a copy of the _chain_intr() function, borrowed as-is from the
 ; source code of OpenWatcom 1.9 (bld/clib/intel/a/chint086.asm). I only

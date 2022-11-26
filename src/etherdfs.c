@@ -404,7 +404,7 @@ static void freeseg(unsigned short segm) {
  *  - 0 if no available id found
  * presentflag set to 0 if no etherdfs found loaded, non-zero otherwise. */
 static unsigned char findfreemultiplex(unsigned char *presentflag) {
-  unsigned char id = 0, freeid = 0, pflag = 0;
+  unsigned char id = 0, freeid = 0xFF, pflag = 0;
   _asm {
     mov id, 0C0h /* start scanning at C0h */
     checkid:
@@ -413,8 +413,11 @@ static unsigned char findfreemultiplex(unsigned char *presentflag) {
     int 2Fh
     /* is it free? (AL == 0) */
     test al, al
-    jnz notfree    /* not free - is it me perhaps? */
-    mov freeid, ah /* it's free - remember it, I may use it myself soon */
+    jnz notfree     /* not free - is it me perhaps? */
+                    /* it's free */
+    cmp ah, freeid  /* is the current id smaller than the freeid ? */
+    jnb checknextid /* no, keep the current freeid */  
+    mov freeid, ah  /* yes - remember it, I may use it myself soon */
     jmp checknextid
     notfree:
     /* is it me? (AL=FF + BX=4D86 CX=7E1 [MV 2017]) */
@@ -697,6 +700,8 @@ int main(int argc, char **argv) {
     pop bx
     pop es
   }
+  /* Save Address of previous int 2f handler also in the resident code segment */
+  prev_2f_handler = MK_FP(glob_data.prev_2f_handler_seg, glob_data.prev_2f_handler_off);
   /* is the TSR installed already? */
   glob_multiplexid = findfreemultiplex(&tmpflag);
   if (tmpflag != 0) { /* already loaded */
@@ -707,6 +712,7 @@ int main(int argc, char **argv) {
            "You may have loaded too many TSRs already.\n");
     return(1);
   }
+  printf("Multiplex ID: %02x\n", glob_multiplexid);
   /* if any of the to-be-mapped drives is already active, fail */
   for (i = 0; i < 26; i++) {
     if (glob_data.ldrv[i] == 0xff) continue;

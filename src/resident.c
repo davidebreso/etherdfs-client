@@ -925,14 +925,15 @@ void process2f(void) {
 static unsigned char newstack[NEWSTACKSZ];
 
 /* this function is hooked on INT 2Fh */
-void __interrupt __far inthandler(union INTPACK r) {
+void __declspec(naked) __far inthandler() {
   /* insert a static code signature so I can reliably patch myself later,
    * this will also contain the DS segment to use and actually set it */
   _asm {
-    jmp SKIPTSRSIG
+    jmp short SKIPTSRSIG
     TSRSIG db 'MVet'
-    SKIPTSRSIG:
-    /* save AX */
+  SKIPTSRSIG:
+    /* save DS and AX */
+    push ds
     push ax
     /* set my custom DS (saved in CS:glob_newds) */
     mov ax, cs:glob_newds
@@ -972,149 +973,30 @@ void __interrupt __far inthandler(union INTPACK r) {
     */
     /* restore AX */
     pop ax
-  }
-
-  /* DEBUG output (BLUE) */
-#if DEBUGLEVEL > 1
-  dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x1e00 | (dbg_hexc[(r.h.ah >> 4) & 0xf]);
-  dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x1e00 | (dbg_hexc[r.h.ah & 0xf]);
-  dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x1e00 | (dbg_hexc[(r.h.al >> 4) & 0xf]);
-  dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x1e00 | (dbg_hexc[r.h.al & 0xf]);
-  dbg_VGA[dbg_startoffset + dbg_xpos++] = 0;
-#endif
-
-  /* is it a multiplex call for me? */
-  if (r.h.ah == glob_multiplexid) {
-    if (r.h.al == 0) { /* install check */
-      r.h.al = 0xff;    /* 'installed' */
-      r.w.bx = 0x4d86;  /* MV          */
-      r.w.cx = 0x7e1;   /* 2017        */
-      return;
-    }
-    if ((r.h.al == 1) && (r.x.cx == 0x4d86)) { /* get shared data ptr (AX=0, ptr under BX:CX) */
-      _asm {
-        push ds
-        pop glob_reqstkword
-      }
-      r.w.ax = 0; /* zero out AX */
-      r.w.bx = glob_reqstkword; /* ptr returned at BX:CX */
-      r.w.cx = FP_OFF(&glob_data);
-      return;
-    }
-  }
-
-  /* if not related to a redirector function (AH=11h), or the function is
-   * an 'install check' (0), or the function is over our scope (2Eh), or it's
-   * an otherwise unsupported function (as pointed out by supportedfunctions),
-   * then call the previous INT 2F handler immediately */
-  if ((r.h.ah != 0x11) || (r.h.al == AL_INSTALLCHK) || (r.h.al > 0x2E) || (supportedfunctions[r.h.al] == AL_UNKNOWN)) goto CHAINTOPREVHANDLER;
-
-  /* DEBUG output (GREEN) */
-#if DEBUGLEVEL > 0
-  dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x2e00 | (dbg_hexc[(r.h.al >> 4) & 0xf]);
-  dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x2e00 | (dbg_hexc[r.h.al & 0xf]);
-  dbg_VGA[dbg_startoffset + dbg_xpos++] = 0;
-#endif
-
-  /* determine whether or not the query is meant for a drive I control,
-   * and if not - chain to the previous INT 2F handler */
-  if (((r.h.al >= AL_CLSFIL) && (r.h.al <= AL_UNLOCKFIL)) || (r.h.al == AL_SKFMEND) || (r.h.al == AL_UNKNOWN_2D)) {
-  /* ES:DI points to the SFT: if the bottom 6 bits of the device information
-   * word in the SFT are > last drive, then it relates to files not associated
-   * with drives, such as LAN Manager named pipes. */
-    struct sftstruct far *sft = MK_FP(r.w.es, r.w.di);
-    glob_reqdrv = sft->dev_info_word & 0x3F;
-  } else {
-    switch (r.h.al) {
-      case AL_FINDNEXT:
-        glob_reqdrv = glob_sdaptr->sdb.drv_lett & 0x1F;
-        break;
-      case AL_SETATTR:
-      case AL_GETATTR:
-      case AL_DELETE:
-      case AL_OPEN:
-      case AL_CREATE:
-      case AL_SPOPNFIL:
-      case AL_MKDIR:
-      case AL_RMDIR:
-      case AL_CHDIR:
-      case AL_RENAME: /* check sda.fn1 for drive */
-        glob_reqdrv = DRIVETONUM(glob_sdaptr->fn1[0]);
-        break;
-      default: /* otherwise check out the CDS (at ES:DI) */
-        {
-        struct cdsstruct far *cds = MK_FP(r.w.es, r.w.di);
-        glob_reqdrv = DRIVETONUM(cds->current_path[0]);
-      #if DEBUGLEVEL > 0 /* DEBUG output (ORANGE) */
-        dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x6e00 | ('A' + glob_reqdrv);
-        dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x6e00 | ':';
-      #endif
-        }
-        break;
-    }
-  }
-  /* validate drive */
-  if ((glob_reqdrv > 25) || (glob_data.ldrv[glob_reqdrv] == 0xff)) {
-    goto CHAINTOPREVHANDLER;
-  }
-
-  /* This should not be necessary. DOS usually generates an FCB-style name in
-   * the appropriate SDA area. However, in the case of user input such as
-   * 'CD ..' or 'DIR ..' it leaves the fcb area all spaces, hence the need to
-   * normalize the fcb area every time. */
-  if (r.h.al != AL_DISKSPACE) {
-    unsigned short i;
-    unsigned char far *path = glob_sdaptr->fn1;
-
-    /* fast forward 'path' to first character of the filename */
-    for (i = 0;; i++) {
-      if (glob_sdaptr->fn1[i] == '\\') path = glob_sdaptr->fn1 + i + 1;
-      if (glob_sdaptr->fn1[i] == 0) break;
-    }
-
-    /* clear out fcb_fn1 by filling it with spaces */
-    for (i = 0; i < 11; i++) glob_sdaptr->fcb_fn1[i] = ' ';
-
-    /* copy 'path' into fcb_name using the fcb syntax ("FILE    TXT") */
-    for (i = 0; *path != 0; path++) {
-      if (*path == '.') {
-        i = 8;
-      } else {
-        glob_sdaptr->fcb_fn1[i++] = *path;
-      }
-    }
-  }
-
-  /* copy interrupt registers into glob_intregs so the int handler can access them without using any stack */
-  copybytes(&glob_intregs, &r, sizeof(union INTPACK));
-  /* set stack to my custom memory */
-  _asm {
-    cli /* make sure to disable interrupts, so nobody gets in the way while I'm fiddling with the stack */
-    mov glob_oldstack_seg, SS
-    mov glob_oldstack_off, SP
-    /* set SS to DS */
-    mov ax, ds
-    mov ss, ax
-    /* set SP to the end of the new stack (-2) */
-    mov sp, offset newstack + NEWSTACKSZ - 2 
-    sti
-  }
-  /* call the actual INT 2F processing function */
-  process2f();
-  /* switch stack back */
-  _asm {
-    cli
-    mov SS, glob_oldstack_seg
-    mov SP, glob_oldstack_off
-    sti
-  }
-  /* copy all registers back so watcom will set them as required 'for real' */
-  copybytes(&r, &glob_intregs, sizeof(union INTPACK));
-  return;
-
+    /* is it a multiplex call for me? */
+    cmp ah, glob_multiplexid
+    jne chain_int2f             /* if not, call next handler in the chain */
+    cmp al, 1                   /* 0 = install check, 1 = get shared data ptr */
+    jnb check_al_1
+    /* here AL = 0  */
+    mov al, 0xff                /* 'installed'  */
+    mov bx, 0x4d86              /* MV           */
+    mov cx, 0x7e1               /* 2017         */
+    pop ds                      /* restore DS   */
+    iret
+  check_al_1:
+    jne chain_int2f             /* if AL != 1, call next handler in the chain */
+    /* AL =1 get shared data ptr (AX=0, ptr under BX:CX) */
+    xor ax, ax                  /* zero out AX */
+    mov bx, ds                  /* ptr returned at BX:CX */
+    mov cx, offset glob_data    
+    pop ds                      /* restore DS   */
+    iret
+  chain_int2f:
   /* hand control to the previous INT 2F handler */
-  CHAINTOPREVHANDLER:
-  _mvchain_intr(MK_FP(glob_data.prev_2f_handler_seg, glob_data.prev_2f_handler_off));
+    pop ds                      /* restore DS   */
+    jmpf cs:prev_2f_handler
+  };
 }
 
 /*********************** HERE ENDS THE RESIDENT PART ***********************/

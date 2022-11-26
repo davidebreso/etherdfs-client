@@ -7,10 +7,10 @@
 #
 
 # Compiler settings to optimize for execution time
-CFLAGS=-0 -s -d0 -ms -wx -ot -DINTSIG_OFF=26
+CFLAGS=-0 -s -d0 -ms -wx -ot -DINTSIG_OFF=2
 
 # Compiler settings to optimize for memory footprint
-# CFLAGS=-0 -s -d0 -ms -wx -os -DINTSIG_OFF=22
+# CFLAGS=-0 -s -d0 -ms -wx -os -DINTSIG_OFF=2
 
 # Uncomment this to build an unpacked executable
 !define NO_PACK
@@ -64,5 +64,5 @@ release: .symbolic etherdfs.exe
 	cp etherdfs.exe ../bin
 	
 push: .symbolic etherdfs.exe
-	cp etherdfs.exe ~/Sites
+	cp etherdfs.exe /Volumes/Retrocomputing/dos_share
 
