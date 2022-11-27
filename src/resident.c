@@ -59,8 +59,12 @@ unsigned short glob_oldstack_off;
 /* the INT 2F "multiplex id" registerd by EtherDFS */
 unsigned char glob_multiplexid;
 
+/**** Allocate space for the Interrupt handler stack */
+struct newstack {
+unsigned char filler[NEWSTACKSZ];
 /* an INTPACK structure used to store registers as set when INT2F is called */
-union INTPACK glob_intregs;
+union INTPACK intregs;
+} glob_ns;
 
 /* copies len bytes from *src to *dst */
 static void __declspec(naked) copybytes(void far *dst, void far *src, unsigned int len) {
@@ -287,6 +291,9 @@ regs.h.al
 regs.h.ah
 */
 
+#define INTPACK_OFF_FLAGS 28
+#define INTPACK_OFF_AX    22
+#define INTPACK_OFF_CX    20
 
 /* sends query out, as found in glob_pktdrv_sndbuff, and awaits for an answer.
  * this function returns the length of replyptr, or 0xFFFF on error. */
@@ -415,8 +422,8 @@ unsigned short sendquery(unsigned char query, unsigned char drive, unsigned shor
 
 /* reset CF (set on error only) and AX (expected to contain the error code,
  * I might set it later) - I assume a success */
-#define SUCCESSFLAG glob_intregs.w.ax = 0; glob_intregs.w.flags &= ~(INTR_CF);
-#define FAILFLAG(x) {glob_intregs.w.ax = x; glob_intregs.w.flags |= INTR_CF;}
+#define SUCCESSFLAG glob_ns.intregs.w.ax = 0; glob_ns.intregs.w.flags &= ~(INTR_CF);
+#define FAILFLAG(x) {glob_ns.intregs.w.ax = x; glob_ns.intregs.w.flags |= INTR_CF;}
 
 /* this function contains the logic behind INT 2F processing */
 void process2f(void) {
@@ -434,13 +441,23 @@ void process2f(void) {
 #if DEBUGLEVEL > 0
   dbg_xpos &= 511;
   dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x4e00 | ' ';
-  dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x4e00 | (dbg_hexc[(glob_intregs.h.al >> 4) & 0xf]);
-  dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x4e00 | (dbg_hexc[glob_intregs.h.al & 0xf]);
+  dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x4e00 | (dbg_hexc[(glob_ns.intregs.h.al >> 4) & 0xf]);
+  dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x4e00 | (dbg_hexc[glob_ns.intregs.h.al & 0xf]);
   dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x4e00 | ' ';
 #endif
 
   /* remember the AL register (0x2F subfunction id) */
-  subfunction = glob_intregs.h.al;
+  subfunction = glob_ns.intregs.h.al;
+
+  /* Print subfunction */
+  _asm{
+    push ax             /* Save AX */
+    mov al, subfunction
+    add al, '0'         /* make AL a printable char */
+    int 0x29            /* print a char with DOS */
+    pop ax              /* restore AX */
+    int 3
+  };
 
   /* if we got here, then the call is definitely for us. set AX and CF to */
   /* 'success' (being a natural optimist I assume success) */
@@ -468,8 +485,8 @@ void process2f(void) {
       copybytes(buff, glob_sdaptr->fn1 + 2, i);
       /* send query providing fn1 */
       if (sendquery(subfunction, glob_reqdrv, i, &answer, &ax, 0) == 0) {
-        glob_intregs.w.ax = *ax;
-        if (*ax != 0) glob_intregs.w.flags |= INTR_CF;
+        glob_ns.intregs.w.ax = *ax;
+        if (*ax != 0) glob_ns.intregs.w.flags |= INTR_CF;
       } else {
         FAILFLAG(2);
       }
@@ -491,8 +508,8 @@ void process2f(void) {
       copybytes(buff, glob_sdaptr->fn1 + 2, i);
       /* send query providing fn1 */
       if (sendquery(AL_CHDIR, glob_reqdrv, i, &answer, &ax, 0) == 0) {
-        glob_intregs.w.ax = *ax;
-        if (*ax != 0) glob_intregs.w.flags |= INTR_CF;
+        glob_ns.intregs.w.ax = *ax;
+        if (*ax != 0) glob_ns.intregs.w.flags |= INTR_CF;
       } else {
         FAILFLAG(3); /* "path not found" */
       }
@@ -503,7 +520,7 @@ void process2f(void) {
        * consistency. I also inform the server about this, just so it knows */
       /* ES:DI points to the SFT */
       {
-      struct sftstruct far *sftptr = MK_FP(glob_intregs.x.es, glob_intregs.x.di);
+      struct sftstruct far *sftptr = MK_FP(glob_ns.intregs.x.es, glob_ns.intregs.x.di);
       if (sftptr->handle_count > 0) sftptr->handle_count--;
       ((unsigned short *)buff)[0] = sftptr->start_sector;
       if (sendquery(AL_CLSFIL, glob_reqdrv, 2, &answer, &ax, 0) == 0) {
@@ -518,7 +535,7 @@ void process2f(void) {
       { /* ES:DI points to the SFT (whose file_pos needs to be updated) */
         /* CX = number of bytes to read (to be updated with number of bytes actually read) */
         /* SDA DTA = read buffer */
-      struct sftstruct far *sftptr = MK_FP(glob_intregs.x.es, glob_intregs.x.di);
+      struct sftstruct far *sftptr = MK_FP(glob_ns.intregs.x.es, glob_ns.intregs.x.di);
       unsigned short totreadlen;
       /* is the file open for write-only? */
       if (sftptr->open_mode & 1) {
@@ -526,13 +543,13 @@ void process2f(void) {
         break;
       }
       /* return immediately if the caller wants to read 0 bytes */
-      if (glob_intregs.x.cx == 0) break;
+      if (glob_ns.intregs.x.cx == 0) break;
       /* do multiple read operations so chunks can fit in my eth frames */
       totreadlen = 0;
       for (;;) {
         int chunklen, len;
-        if ((glob_intregs.x.cx - totreadlen) < (FRAMESIZE - 60)) {
-          chunklen = glob_intregs.x.cx - totreadlen;
+        if ((glob_ns.intregs.x.cx - totreadlen) < (FRAMESIZE - 60)) {
+          chunklen = glob_ns.intregs.x.cx - totreadlen;
         } else {
           chunklen = FRAMESIZE - 60;
         }
@@ -550,9 +567,9 @@ void process2f(void) {
         } else { /* success */
           copybytes(glob_sdaptr->curr_dta + totreadlen, answer, len);
           totreadlen += len;
-          if ((len < chunklen) || (totreadlen == glob_intregs.x.cx)) { /* EOF - update SFT and break out */
+          if ((len < chunklen) || (totreadlen == glob_ns.intregs.x.cx)) { /* EOF - update SFT and break out */
             sftptr->file_pos += totreadlen;
-            glob_intregs.x.cx = totreadlen;
+            glob_ns.intregs.x.cx = totreadlen;
             break;
           }
         }
@@ -563,7 +580,7 @@ void process2f(void) {
       { /* ES:DI points to the SFT (whose file_pos needs to be updated) */
         /* CX = number of bytes to write (to be updated with number of bytes actually written) */
         /* SDA DTA = read buffer */
-      struct sftstruct far *sftptr = MK_FP(glob_intregs.x.es, glob_intregs.x.di);
+      struct sftstruct far *sftptr = MK_FP(glob_ns.intregs.x.es, glob_ns.intregs.x.di);
       unsigned short more, bytesleft, chunklen, written = 0;
       /* is the file open for read-only? */
       if ((sftptr->open_mode & 3) == 0) {
@@ -572,7 +589,7 @@ void process2f(void) {
       }
       /* TODO FIXME I should update the file's time in the SFT here */
       /* do multiple write operations so chunks can fit in my eth frames */
-      bytesleft = glob_intregs.x.cx;
+      bytesleft = glob_ns.intregs.x.cx;
       
       /* BUGFIX: WRITEFIL can be used to truncate a file to the current
        * file position by writing zero bytes. */
@@ -598,7 +615,7 @@ void process2f(void) {
           bytesleft -= len;
           /* Set more to TRUE if there are other chunks to write */
           more = (bytesleft > 0 ? TRUE: FALSE);
-          glob_intregs.x.cx = written;
+          glob_ns.intregs.x.cx = written;
           sftptr->file_pos += len;
           if (sftptr->file_pos > sftptr->file_size) sftptr->file_size = sftptr->file_pos;
           if (len != chunklen) break; /* something bad happened on the other side */
@@ -608,13 +625,13 @@ void process2f(void) {
       break;
     case AL_LOCKFIL: /*** 0Ah: LOCKFIL **************************************/
       {
-      struct sftstruct far *sftptr = MK_FP(glob_intregs.x.es, glob_intregs.x.di);
-      ((unsigned short *)buff)[0] = glob_intregs.x.cx;
+      struct sftstruct far *sftptr = MK_FP(glob_ns.intregs.x.es, glob_ns.intregs.x.di);
+      ((unsigned short *)buff)[0] = glob_ns.intregs.x.cx;
       ((unsigned short *)buff)[1] = sftptr->start_sector;
-      if (glob_intregs.h.bl > 1) FAILFLAG(2); /* BL should be either 0 (lock) or 1 (unlock) */
+      if (glob_ns.intregs.h.bl > 1) FAILFLAG(2); /* BL should be either 0 (lock) or 1 (unlock) */
       /* copy 8*CX bytes from DS:DX to buff+4 (parameters block) */
-      copybytes(buff + 4, MK_FP(glob_intregs.x.ds, glob_intregs.x.dx), glob_intregs.x.cx << 3);
-      if (sendquery(AL_LOCKFIL + glob_intregs.h.bl, glob_reqdrv, (glob_intregs.x.cx << 3) + 4, &answer, &ax, 0) != 0) {
+      copybytes(buff + 4, MK_FP(glob_ns.intregs.x.ds, glob_ns.intregs.x.dx), glob_ns.intregs.x.cx << 3);
+      if (sendquery(AL_LOCKFIL + glob_ns.intregs.h.bl, glob_reqdrv, (glob_ns.intregs.x.cx << 3) + 4, &answer, &ax, 0) != 0) {
         FAILFLAG(2);
       }
       }
@@ -625,10 +642,10 @@ void process2f(void) {
       break;
     case AL_DISKSPACE: /*** 0Ch: get disk information ***********************/
       if (sendquery(AL_DISKSPACE, glob_reqdrv, 0, &answer, &ax, 0) == 6) {
-        glob_intregs.w.ax = *ax; /* sectors per cluster */
-        glob_intregs.w.bx = ((unsigned short *)answer)[0]; /* total clusters */
-        glob_intregs.w.cx = ((unsigned short *)answer)[1]; /* bytes per sector */
-        glob_intregs.w.dx = ((unsigned short *)answer)[2]; /* num of available clusters */
+        glob_ns.intregs.w.ax = *ax; /* sectors per cluster */
+        glob_ns.intregs.w.bx = ((unsigned short *)answer)[0]; /* total clusters */
+        glob_ns.intregs.w.cx = ((unsigned short *)answer)[1]; /* bytes per sector */
+        glob_ns.intregs.w.dx = ((unsigned short *)answer)[2]; /* num of available clusters */
       } else {
         FAILFLAG(2);
       }
@@ -677,11 +694,11 @@ void process2f(void) {
          * AX = attr
          * NOTE: Undocumented DOS talks only about setting AX, no fsize, time
          *       and date, these are documented in RBIL and used by SHSUCDX */
-        glob_intregs.w.cx = ((unsigned short *)answer)[0]; /* time */
-        glob_intregs.w.dx = ((unsigned short *)answer)[1]; /* date */
-        glob_intregs.w.bx = ((unsigned short *)answer)[3]; /* fsize hi word */
-        glob_intregs.w.di = ((unsigned short *)answer)[2]; /* fsize lo word */
-        glob_intregs.w.ax = answer[8];                     /* file attribs */
+        glob_ns.intregs.w.cx = ((unsigned short *)answer)[0]; /* time */
+        glob_ns.intregs.w.dx = ((unsigned short *)answer)[1]; /* date */
+        glob_ns.intregs.w.bx = ((unsigned short *)answer)[3]; /* fsize hi word */
+        glob_ns.intregs.w.di = ((unsigned short *)answer)[2]; /* fsize lo word */
+        glob_ns.intregs.w.ax = answer[8];                     /* file attribs */
       }
       break;
     case AL_RENAME: /*** 11h: RENAME ****************************************/
@@ -761,10 +778,10 @@ void process2f(void) {
         FAILFLAG(*ax);
       } else {
         /* ES:DI contains an uninitialized SFT */
-        struct sftstruct far *sftptr = MK_FP(glob_intregs.x.es, glob_intregs.x.di);
+        struct sftstruct far *sftptr = MK_FP(glob_ns.intregs.x.es, glob_ns.intregs.x.di);
         /* special treatment for SPOP, (set open_mode and return CX, too) */
         if (subfunction == AL_SPOPNFIL) {
-          glob_intregs.w.cx = ((unsigned short *)answer)[11];
+          glob_ns.intregs.w.cx = ((unsigned short *)answer)[11];
         }
         if (sftptr->open_mode & 0x8000) { /* if bit 15 is set, then it's a "FCB open", and requires the internal DOS "Set FCB Owner" function to be called */
           /* TODO FIXME set_sft_owner() */
@@ -824,7 +841,7 @@ void process2f(void) {
         for (i = 2; glob_sdaptr->fn1[i] != 0; i++) buff[i-1] = glob_sdaptr->fn1[i];
         i--; /* adjust i because its one too much otherwise */
       } else { /* FindNext needs to fetch search arguments from DTA (es:di) */
-        dta = MK_FP(glob_intregs.x.es, glob_intregs.x.di);
+        dta = MK_FP(glob_ns.intregs.x.es, glob_ns.intregs.x.di);
         ((unsigned short *)buff)[0] = dta->par_clstr;
         ((unsigned short *)buff)[1] = dta->dir_entry;
         buff[4] = dta->srch_attr;
@@ -835,6 +852,7 @@ void process2f(void) {
       /* send query to remote peer and wait for answer */
       i = sendquery(subfunction, glob_reqdrv, i, &answer, &ax, 0);
       if (i == 0xffffu) {
+      
         if (subfunction == AL_FINDFIRST) {
           FAILFLAG(2); /* a failed findfirst returns error 2 (file not found) */
         } else {
@@ -892,9 +910,9 @@ void process2f(void) {
       break;
     case AL_SKFMEND: /*** 21h: SKFMEND **************************************/
     {
-      struct sftstruct far *sftptr = MK_FP(glob_intregs.x.es, glob_intregs.x.di);
-      ((unsigned short *)buff)[0] = glob_intregs.x.dx;
-      ((unsigned short *)buff)[1] = glob_intregs.x.cx;
+      struct sftstruct far *sftptr = MK_FP(glob_ns.intregs.x.es, glob_ns.intregs.x.di);
+      ((unsigned short *)buff)[0] = glob_ns.intregs.x.dx;
+      ((unsigned short *)buff)[1] = glob_ns.intregs.x.cx;
       ((unsigned short *)buff)[2] = sftptr->start_sector;
       /* send query to remote peer and wait for answer */
       i = sendquery(AL_SKFMEND, glob_reqdrv, 6, &answer, &ax, 0);
@@ -903,15 +921,15 @@ void process2f(void) {
       } else if ((*ax != 0) || (i != 4)) {
         FAILFLAG(*ax);
       } else { /* put new position into DX:AX */
-        glob_intregs.w.ax = ((unsigned short *)answer)[0];
-        glob_intregs.w.dx = ((unsigned short *)answer)[1];
+        glob_ns.intregs.w.ax = ((unsigned short *)answer)[0];
+        glob_ns.intregs.w.dx = ((unsigned short *)answer)[1];
       }
       break;
     }
     case AL_UNKNOWN_2D: /*** 2Dh: UNKNOWN_2D ********************************/
       /* this is only called in MS-DOS v4.01, its purpose is unknown. MSCDEX
        * returns AX=2 there, and so do I. */
-      glob_intregs.w.ax = 2;
+      glob_ns.intregs.w.ax = 2;
       break;
   }
 
@@ -920,9 +938,6 @@ void process2f(void) {
   while ((dbg_msg != NULL) && (*dbg_msg != 0)) dbg_VGA[dbg_startoffset + dbg_xpos++] = 0x4f00 | *(dbg_msg++);
 #endif
 }
-
-/**** Allocate space for the Interrupt handler stack */
-static unsigned char newstack[NEWSTACKSZ];
 
 /*
  * This routine is part of the INT handler
@@ -1013,10 +1028,6 @@ void __declspec(naked) __far inthandler() {
     /* set my custom DS (saved in CS:glob_newds) */
     mov ax, cs:glob_newds
     mov ds, ax
-    /* save one word from the stack (might be used by SETATTR later)
-     * The original stack should be at SS:BP+30 */
-//    mov ax, ss:[BP+6]
-//    mov glob_reqstkword, ax
 
     /* uncomment the debug code below to insert a stack's dump into snd eth
      * frame - debugging ONLY! */
@@ -1074,7 +1085,7 @@ void __declspec(naked) __far inthandler() {
      * then call the previous INT 2F handler immediately */
   not_for_me:
     cmp ah, 0x11
-    jne chain_int2f     /* not a redirector function, call next handler in the chain */    
+    jne chain_int2f     /* not a redirector function, call next handler in the chain */
     cmp al, 0x2E        /* is function in our scope (2Eh) ? */
     ja chain_int2f      /* out of scope, call next handler in the chain */
     push bx             /* save BX and AX */
@@ -1082,7 +1093,17 @@ void __declspec(naked) __far inthandler() {
     mov bx, offset supportedfunctions
     xlat                  /* now AL contains supportedfunctions[AL] */
     cmp al, AL_UNKNOWN    /* is it supported ? */
-    je restore_and_chain  /* not supported, call next handler in the chain */
+    jne supported_fun     /* yes, validate drive */ 
+    /* no, restore registers and chain next int handler */   
+  restore_and_chain:
+    pop ax              /* restore AX and BX */
+    pop bx
+  chain_int2f:
+  /* hand control to the previous INT 2F handler */
+    pop ds                      /* restore DS   */
+    jmpf cs:prev_2f_handler
+
+  supported_fun:
     /* Function supported, print a debug symbol */
     push ax             /* Save AX */
     add al, '0'         /* make AL a printable char */
@@ -1091,25 +1112,80 @@ void __declspec(naked) __far inthandler() {
     
     /* validate drive */
     call validate_drive
-    push ax             /* Save AX */
-    jc print_err
+    jc restore_and_chain
     mov glob_reqdrv, al /* save requested drive for later use */
-    mov al, '!'
-    jmp print_mark
-  print_err:
-    mov al, '?'
-  print_mark:
     /* Print mark */
+    push ax             /* Save AX */
+    mov al, '!'
     int 0x29            /* print a char with DOS */
     pop ax              /* restore AX */
-    
-  restore_and_chain:
+    /* copy interrupt registers into glob_ns.intregs so the int handler 
+     * can access them without using any stack */
     pop ax              /* restore AX and BX */
     pop bx
-  chain_int2f:
-  /* hand control to the previous INT 2F handler */
-    pop ds                      /* restore DS   */
-    jmpf cs:prev_2f_handler
+    // int 3
+    mov word ptr glob_ns + NEWSTACKSZ + INTPACK_OFF_AX, ax      /* save AX */
+    mov word ptr glob_ns + NEWSTACKSZ + INTPACK_OFF_CX, cx      /* save CX */
+    push bp             /* save BP */
+    mov bp, sp          /* BP points to top of stack */
+    mov cx, 2[bp]       /* copy old DS in CX */
+    mov ax, 8[bp]       /* save flags */
+    mov word ptr glob_ns + NEWSTACKSZ + INTPACK_OFF_FLAGS, ax
+    /* save one word from the stack (might be used by SETATTR later)
+     * The original stack should be at SS:BP+30 */
+    mov ax, 10[BP]
+    mov glob_reqstkword, ax
+    /* set stack to my custom memory */
+    cli /* make sure to disable interrupts, so nobody gets in the way while I'm fiddling with the stack */
+    mov glob_oldstack_seg, SS
+    mov glob_oldstack_off, SP
+    /* set SS to DS */
+    mov ax, ds
+    mov ss, ax
+    /* set SP to the end of the new stack */
+    mov sp, offset glob_ns + NEWSTACKSZ + INTPACK_OFF_CX 
+    sti
+    /* push all registers on the stack (except from ax, cx)*/
+    push dx
+    push bx
+    push glob_oldstack_off
+    push bp
+    push si
+    push di
+    push cx           /* CX contains old DS */
+    push es
+    push ax           /* dummy fs */
+    push ax           /* dummy gs */
+    /* call the actual INT 2F processing function */
+    // int 3
+    call process2f
+    /* copy all registers back to set them as required 'for real' */
+    pop ax            /* dummy fs */
+    pop ax            /* dummy gs */
+    pop es
+    pop ax            /* dummy DS, will be restored later */
+    pop di
+    pop si
+    pop bp
+    pop ax            /* dummy SP, will be restored later */
+    pop bx
+    pop dx
+    pop cx
+    pop ax
+    /* switch stack back */
+    cli
+    mov SS, glob_oldstack_seg
+    mov SP, glob_oldstack_off
+    sti
+    /* restore flags */
+    push ax
+    mov ax, word ptr glob_ns + NEWSTACKSZ + INTPACK_OFF_FLAGS    /* restore flags */ 
+    mov 8[bp], ax
+    pop ax
+    /* restore BP and DS */
+    pop bp
+    pop ds
+    iret
   };
 }
 
