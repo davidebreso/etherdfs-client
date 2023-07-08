@@ -1,5 +1,10 @@
 EtherDFS changelog history
 
+v0.9.4 [2023-06-23]:
+ - incorporate bugfix from Mateusz Viste v0.8.3
+ - removed custom __GETDS code that is not needed anymore with recent WCC
+ - use printf to print messages, getmsg hack removed
+
 v0.9.3.1 [2022-01-26]:
  - add code of __GETDS to the resident code. From October 2021 version of WCC, this
    function is called in the preamble of the interrupt routine.

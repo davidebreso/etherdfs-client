@@ -564,7 +564,7 @@ void process2f(void) {
         /* CX = number of bytes to write (to be updated with number of bytes actually written) */
         /* SDA DTA = read buffer */
       struct sftstruct far *sftptr = MK_FP(glob_intregs.x.es, glob_intregs.x.di);
-      unsigned short more, bytesleft, chunklen, written = 0;
+      unsigned short bytesleft, chunklen, written = 0;
       /* is the file open for read-only? */
       if ((sftptr->open_mode & 3) == 0) {
         FAILFLAG(5); /* "access denied" */
@@ -573,11 +573,9 @@ void process2f(void) {
       /* TODO FIXME I should update the file's time in the SFT here */
       /* do multiple write operations so chunks can fit in my eth frames */
       bytesleft = glob_intregs.x.cx;
-      
-      /* BUGFIX: WRITEFIL can be used to truncate a file to the current
-       * file position by writing zero bytes. */
-      more = TRUE;
-      while (more) {
+
+      do { /* MUST do at least one loop so 0-bytes write calls are sent to ethersrv, */
+           /* this is required because a 0-bytes write means "truncate"              */
         unsigned short len;
         chunklen = bytesleft;
         if (chunklen > FRAMESIZE - 66) chunklen = FRAMESIZE - 66;
@@ -596,14 +594,12 @@ void process2f(void) {
           len = ((unsigned short *)answer)[0];
           written += len;
           bytesleft -= len;
-          /* Set more to TRUE if there are other chunks to write */
-          more = (bytesleft > 0 ? TRUE: FALSE);
           glob_intregs.x.cx = written;
           sftptr->file_pos += len;
           if (sftptr->file_pos > sftptr->file_size) sftptr->file_size = sftptr->file_pos;
           if (len != chunklen) break; /* something bad happened on the other side */
         }
-      }
+      } while (bytesleft > 0);
       }
       break;
     case AL_LOCKFIL: /*** 0Ah: LOCKFIL **************************************/
