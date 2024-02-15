@@ -261,6 +261,7 @@ static int string2mac(unsigned char *d, char *mac) {
 #define ARGFL_UNLOAD 4
 #define ARGFL_NOCKSUM 8
 #define ARGFL_LOADHIGH 16
+#define ARGFL_SILENT 32
 /* a structure used to pass and decode arguments between main() and parseargv() */
 struct argstruct {
   int argc;    /* original argc */
@@ -306,6 +307,10 @@ static int parseargv(struct argstruct *args) {
         case 'q':
           if (arg != NULL) return(-4);
           args->flags |= ARGFL_QUIET;
+          break;
+        case 's':
+          if (arg != NULL) return(-4);
+          args->flags |= ARGFL_SILENT | ARGFL_QUIET;
           break;
         case 'p':
           if (arg == NULL) return(-4);
@@ -510,6 +515,7 @@ int main(int argc, char **argv) {
            "  /p=XX   use packet driver at interrupt XX (autodetect otherwise)\n"
            "  /n      disable EtherDFS checksums\n"
            "  /q      quiet mode (print nothing if loaded/unloaded successfully)\n"
+           "  /s      silent mode (print nothing at all)\n"
            "  /h      install EtherDFS in upper memory\n"
            "  /u      unload EtherDFS from memory\n"
            "\n"
@@ -531,7 +537,9 @@ int main(int argc, char **argv) {
     done:
   }
   if (tmpflag < 5) { /* tmpflag contains DOS version or 0 for 'unknown' */
-    printf("Unsupported DOS version! EtherDFS requires MS-DOS 5+.\n");
+    if ((args.flags & ARGFL_SILENT) == 0) {
+        printf("Unsupported DOS version! EtherDFS requires MS-DOS 5+.\n");
+    }
     return(1);
   }
   /* look whether or not it's ok to install a network redirector at int 2F */
@@ -545,7 +553,9 @@ int main(int argc, char **argv) {
     goodtogo:
   }
   if (tmpflag != 0) {
-    printf("Redirector installation has been forbidden either by DOS or another process.\n");
+    if ((args.flags & ARGFL_SILENT) == 0) {
+        printf("Redirector installation has been forbidden either by DOS or another process.\n");
+    }
     return(1);
   }
   /* is it all about unloading myself? */
@@ -558,7 +568,9 @@ int main(int argc, char **argv) {
     /* am I loaded at all? */
     etherdfsid = findfreemultiplex(&tmpflag);
     if (tmpflag == 0) { /* not loaded, cannot unload */
-      printf("EtherDFS is not loaded, so it cannot be unloaded.\n");
+      if ((args.flags & ARGFL_SILENT) == 0) {
+        printf("EtherDFS is not loaded, so it cannot be unloaded.\n");
+      }
       return(1);
     }
     /* am I still at the top of the int 2Fh chain? */
@@ -591,7 +603,9 @@ int main(int argc, char **argv) {
     outmsg(buff);
     */
     if ((int2fptr[0] != 'M') || (int2fptr[1] != 'V') || (int2fptr[2] != 'e') || (int2fptr[3] != 't')) {
-      printf("EtherDFS cannot be unloaded because another TSR hooked its interrupt handler.\n");
+      if ((args.flags & ARGFL_SILENT) == 0) {
+        printf("EtherDFS cannot be unloaded because another TSR hooked its interrupt handler.\n");
+      }
       return(1);
     }
     /* get the ptr to TSR's data */
@@ -612,7 +626,9 @@ int main(int argc, char **argv) {
       pop bx
     }
     if (myseg == 0xffffu) {
-      printf("Communication with the TSR failed.\n");
+      if ((args.flags & ARGFL_SILENT) == 0) {
+        printf("Communication with the TSR failed.\n");
+      }
       return(1);
     }
     // printf("TSR shared data at %04X:%04X\n", myseg, myoff);
@@ -700,11 +716,15 @@ int main(int argc, char **argv) {
   /* is the TSR installed already? */
   glob_multiplexid = findfreemultiplex(&tmpflag);
   if (tmpflag != 0) { /* already loaded */
-    printf("EtherDFS is already installed and cannot be loaded twice.\n");
+    if ((args.flags & ARGFL_SILENT) == 0) {
+      printf("EtherDFS is already installed and cannot be loaded twice.\n");
+    }
     return(1);
   } else if (glob_multiplexid == 0) { /* no free multiplex id found */
-    printf("Failed to find an available INT 2F multiplex id.\n"
-           "You may have loaded too many TSRs already.\n");
+    if ((args.flags & ARGFL_SILENT) == 0) {
+      printf("Failed to find an available INT 2F multiplex id.\n"
+             "You may have loaded too many TSRs already.\n");
+    }
     return(1);
   }
   /* if any of the to-be-mapped drives is already active, fail */
@@ -712,14 +732,18 @@ int main(int argc, char **argv) {
     if (glob_data.ldrv[i] == 0xff) continue;
     cds = getcds(i);
     if (cds == NULL) {
-      printf("Unable to activate the local drive mapping. You are either using an\n"
-             "unsupported operating system, or your LASTDRIVE directive does not permit\n"
-             "to define the requested drive letter (try LASTDRIVE=Z in your CONFIG.SYS).\n");
+      if ((args.flags & ARGFL_SILENT) == 0) {
+        printf("Unable to activate the local drive mapping. You are either using an\n"
+               "unsupported operating system, or your LASTDRIVE directive does not permit\n"
+               "to define the requested drive letter (try LASTDRIVE=Z in your CONFIG.SYS).\n");
+      }
       return(1);
     }
     if (cds->flags != 0) {
-      printf("The requested local drive letter is already in use. Please choose another\n"
-             "drive letter.\n");
+      if ((args.flags & ARGFL_SILENT) == 0) {
+        printf("The requested local drive letter is already in use. Please choose another\n"
+               "drive letter.\n");
+      }
       return(1);
     }
   }
@@ -742,7 +766,9 @@ int main(int argc, char **argv) {
   }
   /* has it succeeded? */
   if (glob_data.pktint == 0) {
-    printf("Packet driver initialization failed.\n");
+    if ((args.flags & ARGFL_SILENT) == 0) {
+      printf("Packet driver initialization failed.\n");
+    }
     return(1);
   }
   pktdrv_getaddr(GLOB_LMAC);
@@ -755,7 +781,9 @@ int main(int argc, char **argv) {
     for (i = 0; glob_data.ldrv[i] == 0xff; i++); /* find first mapped disk */
     /* send a discovery frame that will update glob_rmac */
     if (sendquery(AL_DISKSPACE, i, 0, &answer, &ax, 1) != 6) {
-      printf("No EtherSRV server found on the LAN (not for requested drive at least).\n");
+      if ((args.flags & ARGFL_SILENT) == 0) {
+        printf("No EtherSRV server found on the LAN (not for requested drive at least).\n");
+      }
       pktdrv_free(); /* free the pkt drv and quit */
       return(1);
     }
@@ -787,7 +815,9 @@ int main(int argc, char **argv) {
     upperseg = allocseg(residentsize);
     if (upperseg == 0) {
       /* Upper memory allocation error, load in conventional memory */
-      printf("Upper memory alloc error, loading TSR in conventional memory.\n");
+      if ((args.flags & ARGFL_SILENT) == 0) {
+        printf("Upper memory alloc error, loading TSR in conventional memory.\n");
+      }
       args.flags &= ~ARGFL_LOADHIGH;
     } else {
       // printf("Upper segment at %04X\n", upperseg);
@@ -856,7 +886,9 @@ int main(int argc, char **argv) {
         }
         /* Release upper memory block */
         freeseg(upperseg);
-        printf("Relocation to upper memory failed.\n");
+        if ((args.flags & ARGFL_SILENT) == 0) {
+          printf("Relocation to upper memory failed.\n");
+        }
         return(1);
       }
     }
