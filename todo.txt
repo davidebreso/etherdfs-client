@@ -1,5 +1,5 @@
 TO DO
- - Test v0.9.3.1
+ - Test v0.9.4
 
 DONE 
  - Implemented write zero bytes to truncate file
