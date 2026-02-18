@@ -360,28 +360,30 @@ __declspec(naked) static unsigned short allocseg(unsigned short sz) {
   /* ask DOS for memory */
   _asm {
     /* set strategy to 'last fit' */
-    mov ax, 5800h /* DOS 2.11+ - GET OR SET MEMORY ALLOCATION STRATEGY
-                   * al = 0 means 'get allocation strategy' */
-    int 21h       /* now current strategy is in ax */
-    push ax       /* push current strategy to stack */
-    mov ax, 5802h /* al = 2 means 'get UMB Link Status'*/ 
-    int 21h       /* now current link status is in ax */
-    push ax       /* push UMB Link Status to stack */
-    mov ax, 5803h /* al = 3 means 'Set UMB Link Status' */
-    mov bx, 1     /* 1 means 'include upper memory' */
+    mov ax, 5800h   /* DOS 2.11+ - GET OR SET MEMORY ALLOCATION STRATEGY
+                     * al = 0 means 'get allocation strategy' */
+    int 21h         /* now current strategy is in ax */
+    push ax         /* push current strategy to stack */
+    mov ax, 5802h   /* al = 2 means 'get UMB Link Status'*/ 
+    int 21h         /* now current link status is in ax */
+    push ax         /* push UMB Link Status to stack */
+    mov ax, 5803h   /* al = 3 means 'Set UMB Link Status' */
+    mov bx, 1       /* 1 means 'include upper memory' */
     int 21h
-    mov ax, 5801h /* al = 1 means 'set strategy' */
+    jc  failed      /* check CF */
+    mov ax, 5801h   /* al = 1 means 'set strategy' */
     mov bx, 0041h   /* 41h means 'upper best fit' */
     int 21h
+    jc  failed      /* check CF */
     /* do the allocation now */
     mov ah, 48h     /* alloc memory (DOS 2+) */
     mov bx, dx      /* number of paragraphs to allocate */
-    mov dx, 0       /* pre-set res to failure (0) */
     int 21h         /* returns allocated segment in AX */
-    /* check CF */
-    jc failed
-    mov dx, ax    /* set res to actual result */
-    failed:
+    mov dx, ax      /* set res to actual result */
+    jnc done        /* check CF */
+failed:
+    mov dx, 0       /* set res to failure (0) */
+done:
     /* set link status back to its initial setting */
     mov ax, 5803h
     pop bx    /* pop UMB Link Status from stack */
@@ -820,7 +822,7 @@ int main(int argc, char **argv) {
       }
       args.flags &= ~ARGFL_LOADHIGH;
     } else {
-      // printf("Upper segment at %04X\n", upperseg);
+      //printf("Upper segment at %04X\n", upperseg);
       /* New resident data segment is upperseg + sizeof(PSP) in paragraphs 
        * PSP is 256 bytes (16 paragraphs). */
       glob_newds = upperseg + 16;
